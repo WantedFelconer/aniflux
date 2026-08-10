@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "client"
+  ],
   "scripts": {
     "dev": "npm run dev --prefix client",
     "build": "npm run build --prefix client",

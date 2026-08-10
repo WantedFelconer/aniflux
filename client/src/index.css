@@ -1,0 +1,91 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #09090b;
+  --color-card: #111216;
+  --color-card-hover: #1b1d23;
+  --color-border: #23252b;
+  --color-purple: #6d3bff;
+  --color-purple-dim: #4d2ab5;
+  --color-blue: #4a8dff;
+  --color-pink: #ff4db8;
+  --color-text: #ffffff;
+  --color-muted: #a0a0a0;
+  --radius: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: #09090b;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+  opacity: 0;
+}
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #23252b; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #6d3bff; }
+
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 12px rgba(109,59,255,0.4); }
+  50% { box-shadow: 0 0 24px rgba(109,59,255,0.8); }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, #1b1d23 25%, #2a2d35 50%, #1b1d23 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.glow-purple { animation: pulse-glow 2s ease-in-out infinite; }
+
+.slide-in { animation: slideIn 0.3s ease forwards; }
+.fade-in { animation: fadeIn 0.4s ease forwards; }
+
+.glass {
+  background: rgba(17, 18, 22, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(35, 37, 43, 0.6);
+}
+
+.card-hover {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.card-hover:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+}
+
+.genre-chip {
+  transition: all 0.2s ease;
+}
+.genre-chip:hover {
+  background: linear-gradient(135deg, #6d3bff, #4a8dff);
+  color: white;
+  border-color: transparent;
+}
