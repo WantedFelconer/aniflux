@@ -1,10 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import mysql from 'mysql2/promise';
+import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const animeSeed = [
   {
@@ -98,12 +101,23 @@ const animeSeed = [
 ];
 
 async function seed() {
+  const host = process.env.DB_HOST;
+  const port = parseInt(process.env.DB_PORT || '3306');
+  const user = process.env.DB_USER;
+  const password = process.env.DB_PASSWORD;
+  const database = process.env.DB_NAME || 'defaultdb';
+  const ssl = (process.env.DB_SSL === 'true' || process.env.DB_SSL === '1' || (host && (host.includes('aiven') || host.includes('tidb'))))
+    ? { rejectUnauthorized: false }
+    : undefined;
+
+  console.log(`Connecting to MySQL database at ${host}:${port}/${database}...`);
   const conn = await mysql.createConnection({
-    host: 'localhost',
-    port: 3306,
-    user: 'root',
-    password: '',
-    database: 'if0_42473764_8anime',
+    host,
+    port,
+    user,
+    password,
+    database,
+    ssl,
     multipleStatements: true
   });
 
@@ -203,7 +217,7 @@ async function seed() {
 
   // Related anime seed
   await conn.query(
-    'INSERT IGNORE INTO related_anime (anime_id, related_anime_id, relation_type) VALUES (1, 6, "side_story"), (2, 8, "prequel"), (8, 2, "sequel")'
+    "INSERT IGNORE INTO related_anime (anime_id, related_anime_id, relation_type) VALUES (1, 6, 'side_story'), (2, 8, 'prequel'), (8, 2, 'sequel')"
   );
 
   console.log('Database successfully seeded!');

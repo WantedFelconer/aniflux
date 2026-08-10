@@ -1,12 +1,22 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 // Standard MySQL Pool setup
 let pool = null;
 
-const dbHost = process.env.DB_HOST || 'sql312.infinityfree.com';
+const dbHost = process.env.DB_HOST;
+const dbPort = parseInt(process.env.DB_PORT || '3306');
+const dbUser = process.env.DB_USER;
+const dbPassword = process.env.DB_PASSWORD;
+const dbName = process.env.DB_NAME || 'defaultdb';
 
 if (dbHost) {
   try {
@@ -16,15 +26,15 @@ if (dbHost) {
 
     pool = mysql.createPool({
       host: dbHost,
-      port: parseInt(process.env.DB_PORT || '3306'),
-      user: process.env.DB_USER || 'if0_42473764',
-      password: process.env.DB_PASSWORD || '4ZPXDNL7Ku',
-      database: process.env.DB_NAME || 'if0_42473764_8anime',
+      port: dbPort,
+      user: dbUser,
+      password: dbPassword,
+      database: dbName,
       ssl: sslConfig,
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
-      connectTimeout: 5000
+      connectTimeout: 10000
     });
   } catch (e) {
     console.warn('MySQL pool initialization error, using in-memory fallback:', e.message);
