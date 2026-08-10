@@ -1,0 +1,22 @@
+{
+  "name": "aniflux",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "server": "node server/index.js",
+    "db:init": "node server/init_db.js && node server/seed.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.6.2",
+    "mysql2": "^3.23.2",
+    "nodemailer": "^9.0.5"
+  }
+}

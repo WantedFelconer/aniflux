@@ -1,0 +1,10 @@
+node_modules/
+client/node_modules/
+dist/
+client/dist/
+.env
+client/.env
+.vercel
+.figma
+*.log
+.DS_Store
