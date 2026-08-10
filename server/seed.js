@@ -105,7 +105,7 @@ async function seed() {
   const port = parseInt(process.env.DB_PORT || '3306');
   const user = process.env.DB_USER;
   const password = process.env.DB_PASSWORD;
-  const database = process.env.DB_NAME || 'defaultdb';
+  const database = process.env.DB_NAME || 'aniflux';
   const ssl = (process.env.DB_SSL === 'true' || process.env.DB_SSL === '1' || (host && (host.includes('aiven') || host.includes('tidb'))))
     ? { rejectUnauthorized: false }
     : undefined;
