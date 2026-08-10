@@ -6,14 +6,16 @@ dotenv.config();
 // Standard MySQL Pool setup
 let pool = null;
 
-if (process.env.DB_HOST) {
+const dbHost = process.env.DB_HOST || 'sql312.infinityfree.com';
+
+if (dbHost) {
   try {
-    const sslConfig = (process.env.DB_SSL === 'true' || process.env.DB_SSL === '1' || process.env.DB_HOST.includes('tidb') || process.env.DB_HOST.includes('aiven'))
+    const sslConfig = (process.env.DB_SSL === 'true' || process.env.DB_SSL === '1' || dbHost.includes('tidb') || dbHost.includes('aiven'))
       ? { rejectUnauthorized: false }
       : undefined;
 
     pool = mysql.createPool({
-      host: process.env.DB_HOST || 'sql312.infinityfree.com',
+      host: dbHost,
       port: parseInt(process.env.DB_PORT || '3306'),
       user: process.env.DB_USER || 'if0_42473764',
       password: process.env.DB_PASSWORD || '4ZPXDNL7Ku',
@@ -21,7 +23,8 @@ if (process.env.DB_HOST) {
       ssl: sslConfig,
       waitForConnections: true,
       connectionLimit: 10,
-      queueLimit: 0
+      queueLimit: 0,
+      connectTimeout: 5000
     });
   } catch (e) {
     console.warn('MySQL pool initialization error, using in-memory fallback:', e.message);
