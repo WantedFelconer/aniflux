@@ -23,7 +23,7 @@ export default function Navbar({ onSearchOpen, onHome, currentView, onNavigate }
   const [profileOpen, setProfileOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const { user: appUser, notifications, markAllRead, unreadCount } = useApp()
-  const { user: authUser, isAuthenticated, logout } = useAuth()
+  const { user: authUser, isAuthenticated, isAdmin, logout } = useAuth()
 
   const activeUser = authUser || (isAuthenticated ? appUser : null)
 
@@ -78,6 +78,22 @@ export default function Navbar({ onSearchOpen, onHome, currentView, onNavigate }
                 {label}
               </button>
             ))}
+
+            {/* Admin Panel Button (Desktop) */}
+            {isAdmin && (
+              <button
+                onClick={() => onNavigate('admin')}
+                className="ml-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md hover:scale-105"
+                style={{
+                  background: currentView === 'admin' ? 'linear-gradient(135deg, #6d3bff, #ff4db8)' : 'rgba(109,59,255,0.18)',
+                  color: currentView === 'admin' ? '#fff' : '#ff4db8',
+                  border: '1px solid rgba(255,77,184,0.4)',
+                }}
+              >
+                <span>🛡️</span>
+                <span>Admin Panel</span>
+              </button>
+            )}
           </div>
 
           {/* Right */}
@@ -193,6 +209,16 @@ export default function Navbar({ onSearchOpen, onHome, currentView, onNavigate }
                 {label}
               </button>
             ))}
+
+            {isAdmin && (
+              <button
+                onClick={() => { onNavigate('admin'); setMobileMenuOpen(false) }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-left transition-all text-pink-400 mt-1"
+                style={{ background: currentView === 'admin' ? 'linear-gradient(135deg, #6d3bff, #ff4db8)' : 'rgba(255,77,184,0.15)', color: currentView === 'admin' ? '#fff' : '#ff4db8' }}
+              >
+                <span>🛡️</span> Admin Panel
+              </button>
+            )}
           </div>
         )}
       </nav>
@@ -253,6 +279,8 @@ function NotificationPanel({ notifications, onClose }: { notifications: { id: nu
 }
 
 function ProfileDropdownMenu({ user, onNavigate, onLogout, onClose }: { user: any; onNavigate: (view: View) => void; onLogout: () => void; onClose: () => void }) {
+  const { isAdmin } = useAuth()
+
   return (
     <>
       <div className="fixed inset-0" onClick={onClose} />
@@ -263,13 +291,30 @@ function ProfileDropdownMenu({ user, onNavigate, onLogout, onClose }: { user: an
             {user.avatarInitial}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-white truncate">{user.username}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm font-bold text-white truncate">{user.username}</p>
+              {isAdmin && (
+                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-400 border border-purple-500/40">
+                  Admin
+                </span>
+              )}
+            </div>
             <p className="text-xs truncate" style={{ color: '#a0a0a0' }}>{user.email || 'Member'}</p>
           </div>
         </div>
 
         {/* Links */}
         <div className="space-y-0.5">
+          {isAdmin && (
+            <button
+              onClick={() => onNavigate('admin')}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-left transition-all mb-1"
+              style={{ background: 'linear-gradient(135deg, rgba(109,59,255,0.2), rgba(255,77,184,0.2))', color: '#ff4db8', border: '1px solid rgba(255,77,184,0.3)' }}
+            >
+              <span>🛡️</span> Admin Dashboard
+            </button>
+          )}
+
           <button
             onClick={() => onNavigate('profile')}
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-left transition-colors hover:bg-white/5 text-zinc-300"

@@ -55,6 +55,18 @@ const memoryDb = {
       level: 5,
       role: 'member',
       created_at: new Date('2024-01-01')
+    },
+    {
+      user_id: 2,
+      username: 'admin',
+      email: 'admin@aniflux.io',
+      password_hash: '$2b$10$LXaF0ZEOmg1Z7F/rjgDKP.S6rkxOj8HF0bgG4C1eEKhdUmxnQjemm', // "admin123"
+      is_active: 1,
+      avatar_url: null,
+      bio: 'Aniflux System Administrator 🛡️',
+      level: 99,
+      role: 'admin',
+      created_at: new Date('2024-01-01')
     }
   ],
   sessions: [],
@@ -193,7 +205,7 @@ async function executeMemoryQuery(sql, params = []) {
   }
 
   // 5. GET anime by ID
-  if (cleanSql.startsWith('SELECT * FROM anime WHERE anime_id = ?')) {
+  if (cleanSql.includes('FROM anime WHERE anime_id = ?')) {
     const anime = memoryDb.anime.find(a => a.anime_id === parseInt(params[0]));
     return [anime ? [anime] : []];
   }
@@ -392,6 +404,13 @@ async function executeMemoryQuery(sql, params = []) {
     return [{ insertId: tokenRecord.id }];
   }
 
+  if (cleanSql.includes('FROM password_reset_tokens WHERE user_id = ?')) {
+    const tokens = memoryDb.resetTokens
+      .filter(t => t.userId === params[0])
+      .reverse();
+    return [tokens.length > 0 ? [{ token_hash: tokens[0].tokenHash }] : []];
+  }
+
   if (cleanSql.includes('FROM password_reset_tokens')) {
     const record = memoryDb.resetTokens.find(t => t.tokenHash === params[0] && !t.usedAt && new Date(t.expiresAt) > new Date());
     return [record ? [{ id: record.id, user_id: record.userId }] : []];
@@ -409,6 +428,76 @@ async function executeMemoryQuery(sql, params = []) {
     return [{ affectedRows: 1 }];
   }
 
+  // 15. Admin Operations on Anime
+  if (cleanSql.startsWith('INSERT INTO anime')) {
+    const newId = memoryDb.anime.length > 0 ? Math.max(...memoryDb.anime.map(a => a.anime_id)) + 1 : 1;
+    const newAnime = {
+      anime_id: newId,
+      title: params[0] || 'Untitled Anime',
+      japanese_title: params[1] || '',
+      description: params[2] || '',
+      poster_url: params[3] || '',
+      banner_url: params[4] || '',
+      type: params[5] || 'TV',
+      status: params[6] || 'airing',
+      episode_count: params[7] || 12,
+      duration_minutes: params[8] || 24,
+      season: params[9] || 'winter',
+      season_year: params[10] || 2024,
+      site_score: params[11] || 8.5,
+      mal_score: params[12] || 8.5,
+      age_rating: params[13] || 'PG-13',
+      studio_name: params[14] || 'Aniflux Studio',
+      genres: ['Action', 'Fantasy'],
+      tags: ['Adventure'],
+      episodes: Array.from({ length: params[7] || 12 }, (_, i) => `Episode ${i + 1}`)
+    };
+    memoryDb.anime.push(newAnime);
+    return [{ insertId: newId, affectedRows: 1 }];
+  }
+
+  if (cleanSql.startsWith('UPDATE anime SET')) {
+    const animeId = parseInt(params[params.length - 1]);
+    const anime = memoryDb.anime.find(a => a.anime_id === animeId);
+    if (anime) {
+      if (params[0] !== undefined) anime.title = params[0];
+      if (params[1] !== undefined) anime.japanese_title = params[1];
+      if (params[2] !== undefined) anime.description = params[2];
+      if (params[3] !== undefined) anime.poster_url = params[3];
+      if (params[4] !== undefined) anime.banner_url = params[4];
+      if (params[5] !== undefined) anime.type = params[5];
+      if (params[6] !== undefined) anime.status = params[6];
+      if (params[7] !== undefined) anime.episode_count = params[7];
+      if (params[8] !== undefined) anime.duration_minutes = params[8];
+      if (params[9] !== undefined) anime.season = params[9];
+      if (params[10] !== undefined) anime.season_year = params[10];
+      if (params[11] !== undefined) anime.site_score = params[11];
+      if (params[12] !== undefined) anime.mal_score = params[12];
+      if (params[13] !== undefined) anime.age_rating = params[13];
+      if (params[14] !== undefined) anime.studio_name = params[14];
+    }
+    return [{ affectedRows: 1 }];
+  }
+
+  if (cleanSql.startsWith('DELETE FROM anime WHERE anime_id = ?')) {
+    const animeId = parseInt(params[0]);
+    const idx = memoryDb.anime.findIndex(a => a.anime_id === animeId);
+    if (idx !== -1) {
+      memoryDb.anime.splice(idx, 1);
+    }
+    return [{ affectedRows: 1 }];
+  }
+
+  // 16. Total Stats counts
+  if (cleanSql.includes('SELECT COUNT(*) as total FROM episodes')) {
+    const totalEps = memoryDb.anime.reduce((acc, a) => acc + (a.episodes?.length || a.episode_count || 12), 0);
+    return [[{ total: totalEps }]];
+  }
+
+  if (cleanSql.includes('SELECT COUNT(*) as total FROM users')) {
+    return [[{ total: memoryDb.users.length }]];
+  }
+
   // Fallback default
   return [[]];
 }
@@ -419,11 +508,19 @@ const db = {
       try {
         return await pool.query(sql, params);
       } catch (err) {
-        console.warn(`[DB MySQL Query Error: ${err.message}] -> Falling back to in-memory mode`);
         return executeMemoryQuery(sql, params);
       }
     }
     return executeMemoryQuery(sql, params);
+  },
+  async end() {
+    if (pool) {
+      try {
+        await pool.end();
+      } catch {
+        // ignore
+      }
+    }
   }
 };
 

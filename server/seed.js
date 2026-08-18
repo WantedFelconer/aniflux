@@ -126,6 +126,15 @@ async function seed() {
   await conn.query(schemaSql);
   console.log('Schema applied successfully.');
 
+  // Seed Default Admin User
+  const adminPasswordHash = '$2b$10$LXaF0ZEOmg1Z7F/rjgDKP.S6rkxOj8HF0bgG4C1eEKhdUmxnQjemm'; // "admin123"
+  await conn.query(
+    `INSERT INTO users (username, email, password_hash, role, level, bio)
+     VALUES ('admin', 'admin@aniflux.io', ?, 'admin', 99, 'Aniflux System Administrator 🛡️')
+     ON DUPLICATE KEY UPDATE role='admin', password_hash=VALUES(password_hash)`,
+    [adminPasswordHash]
+  );
+
   console.log('Seeding Studios, Producers, Genres, Tags, and Anime data...');
   
   for (const item of animeSeed) {

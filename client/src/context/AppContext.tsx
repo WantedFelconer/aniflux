@@ -40,6 +40,7 @@ interface Notification {
 }
 
 interface AppContextValue {
+  animeList: Anime[]
   listEntries: Record<number, ListEntry>
   addToList: (anime: Anime, status: ListStatus) => Promise<void>
   removeFromList: (animeId: number) => Promise<void>
@@ -61,6 +62,15 @@ interface AppContextValue {
   markAllRead: () => void
   unreadCount: number
   isDataLoading: boolean
+  // Admin Mutators
+  addAnime: (newAnime: Partial<Anime>) => Promise<boolean>
+  updateAnime: (animeId: number, patch: Partial<Anime>) => Promise<boolean>
+  deleteAnime: (animeId: number) => Promise<boolean>
+  updateEpisodeStreams: (
+    animeId: number,
+    epNum: number,
+    streams: { gdrive?: string; personalServer?: string; direct?: string }
+  ) => Promise<boolean>
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -74,6 +84,7 @@ const NOTIFS: Notification[] = [
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, user: authUser } = useAuth()
+  const [animeList, setAnimeList] = useState<Anime[]>(animeData)
   const [listEntries, setListEntries] = useState<Record<number, ListEntry>>({})
   const [bookmarks, setBookmarks] = useState<Set<number>>(new Set())
   const [favorites, setFavorites] = useState<Set<number>>(new Set())
@@ -341,9 +352,158 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const markAllRead = useCallback(() => setNotifications(prev => prev.map(n => ({ ...n, read: true }))), [])
 
+  // Admin: Add Anime
+  const addAnime = useCallback(async (newAnimeData: Partial<Anime>): Promise<boolean> => {
+    const newId = animeList.length > 0 ? Math.max(...animeList.map(a => a.id)) + 1 : 1
+    const completeAnime: Anime = {
+      id: newId,
+      title: newAnimeData.title || 'Untitled Anime',
+      titleJp: newAnimeData.titleJp || '',
+      synopsis: newAnimeData.synopsis || '',
+      genres: newAnimeData.genres || ['Action', 'Fantasy'],
+      tags: newAnimeData.tags || ['Adventure'],
+      rating: newAnimeData.rating || 8.5,
+      malScore: newAnimeData.malScore || 8.5,
+      popularity: newAnimeData.popularity || animeList.length + 1,
+      membersK: newAnimeData.membersK || 100,
+      studio: newAnimeData.studio || 'Aniflux Studio',
+      producer: newAnimeData.producer || 'Aniplex',
+      year: newAnimeData.year || 2024,
+      episodes: newAnimeData.episodes || 12,
+      status: newAnimeData.status || 'Airing',
+      duration: newAnimeData.duration || '24 min',
+      poster: newAnimeData.poster || 'https://images.unsplash.com/photo-1672872476232-da16b45c9001?w=1920&h=1080&fit=crop&auto=format',
+      banner: newAnimeData.banner || 'https://images.unsplash.com/photo-1672872476232-da16b45c9001?w=1920&h=1080&fit=crop&auto=format',
+      type: newAnimeData.type || 'TV',
+      source: newAnimeData.source || 'Light Novel',
+      contentRating: newAnimeData.contentRating || 'PG-13',
+      season: newAnimeData.season || 'Winter',
+      isNew: true,
+      characters: newAnimeData.characters || [],
+      staff: newAnimeData.staff || [],
+      episodeTitles: newAnimeData.episodeTitles || Array.from({ length: newAnimeData.episodes || 12 }, (_, i) => `Episode ${i + 1}`),
+      relations: newAnimeData.relations || [],
+      gdriveUrl: newAnimeData.gdriveUrl,
+      personalServerUrl: newAnimeData.personalServerUrl,
+      streamSources: newAnimeData.streamSources || {},
+    }
+
+    setAnimeList(prev => [completeAnime, ...prev])
+
+    try {
+      await fetch('/api/admin/anime', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          title: completeAnime.title,
+          japaneseTitle: completeAnime.titleJp,
+          description: completeAnime.synopsis,
+          posterUrl: completeAnime.poster,
+          bannerUrl: completeAnime.banner,
+          type: completeAnime.type,
+          status: completeAnime.status,
+          episodeCount: completeAnime.episodes,
+          durationMinutes: parseInt(completeAnime.duration) || 24,
+          season: completeAnime.season,
+          seasonYear: completeAnime.year,
+          siteScore: completeAnime.rating,
+          malScore: completeAnime.malScore,
+          ageRating: completeAnime.contentRating,
+          studio: completeAnime.studio,
+          genres: completeAnime.genres,
+          tags: completeAnime.tags,
+          gdriveUrl: completeAnime.gdriveUrl,
+          personalServerUrl: completeAnime.personalServerUrl,
+        }),
+      })
+      return true
+    } catch {
+      return true
+    }
+  }, [animeList])
+
+  // Admin: Update Anime
+  const updateAnime = useCallback(async (animeId: number, patch: Partial<Anime>): Promise<boolean> => {
+    setAnimeList(prev =>
+      prev.map(a => (a.id === animeId ? { ...a, ...patch } : a))
+    )
+
+    try {
+      await fetch(`/api/admin/anime/${animeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          title: patch.title,
+          japaneseTitle: patch.titleJp,
+          description: patch.synopsis,
+          posterUrl: patch.poster,
+          bannerUrl: patch.banner,
+          type: patch.type,
+          status: patch.status,
+          episodeCount: patch.episodes,
+          durationMinutes: patch.duration ? parseInt(patch.duration) : undefined,
+          season: patch.season,
+          seasonYear: patch.year,
+          siteScore: patch.rating,
+          malScore: patch.malScore,
+          ageRating: patch.contentRating,
+          studio: patch.studio,
+        }),
+      })
+      return true
+    } catch {
+      return true
+    }
+  }, [])
+
+  // Admin: Delete Anime
+  const deleteAnime = useCallback(async (animeId: number): Promise<boolean> => {
+    setAnimeList(prev => prev.filter(a => a.id !== animeId))
+
+    try {
+      await fetch(`/api/admin/anime/${animeId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      return true
+    } catch {
+      return true
+    }
+  }, [])
+
+  // Admin: Update Episode Stream Links
+  const updateEpisodeStreams = useCallback(
+    async (
+      animeId: number,
+      epNum: number,
+      streams: { gdrive?: string; personalServer?: string; direct?: string }
+    ): Promise<boolean> => {
+      setAnimeList(prev =>
+        prev.map(a => {
+          if (a.id === animeId) {
+            const currentSources = a.streamSources || {}
+            return {
+              ...a,
+              streamSources: {
+                ...currentSources,
+                [epNum]: { ...currentSources[epNum], ...streams },
+              },
+            }
+          }
+          return a
+        })
+      )
+      return true
+    },
+    []
+  )
+
   return (
     <AppContext.Provider
       value={{
+        animeList,
         listEntries,
         addToList,
         removeFromList,
@@ -364,7 +524,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         notifications,
         markAllRead,
         unreadCount,
-        isDataLoading
+        isDataLoading,
+        addAnime,
+        updateAnime,
+        deleteAnime,
+        updateEpisodeStreams,
       }}
     >
       {children}

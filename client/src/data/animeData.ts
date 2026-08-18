@@ -32,6 +32,9 @@ export interface Anime {
   staff: StaffMember[]
   episodeTitles: string[]
   relations: { type: string; animeId: number }[]
+  gdriveUrl?: string
+  personalServerUrl?: string
+  streamSources?: Record<number, { gdrive?: string; personalServer?: string; direct?: string }>
 }
 
 export interface Character {

@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
 import animeRoutes from './routes/anime.js';
 import meRoutes from './routes/me.js';
+import adminRoutes from './routes/admin.js';
 
 dotenv.config();
 
@@ -59,6 +60,7 @@ app.use('/api/auth/forgot-password', authLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/anime', animeRoutes);
 app.use('/api/me', meRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

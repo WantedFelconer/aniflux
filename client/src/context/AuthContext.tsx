@@ -17,6 +17,7 @@ export interface User {
 interface AuthContextValue {
   user: User | null
   isAuthenticated: boolean
+  isAdmin: boolean
   isLoading: boolean
   authError: string | null
   resetToken: string | null
@@ -51,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
 
   const isAuthenticated = !!user
+  const isAdmin = user?.role === 'admin' || user?.username === 'admin' || user?.email === 'admin@aniflux.io'
 
   // Check current session on application mount
   useEffect(() => {
@@ -295,6 +297,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isAuthenticated,
+        isAdmin,
         isLoading,
         authError,
         resetToken,

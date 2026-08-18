@@ -11,9 +11,9 @@ const rankBg = (r: number) => r === 1 ? 'linear-gradient(135deg,#f59e0b,#ef4444)
 export default function TrendingPage({ onAnimeClick, onWatch }: Props) {
   const [period, setPeriod] = useState('This Week')
   const [layout, setLayout] = useState<'list' | 'grid'>('list')
-  const { bookmarks, toggleBookmark, addToList } = useApp()
+  const { animeList, bookmarks, toggleBookmark, addToList } = useApp()
 
-  const sorted = [...animeData].sort((a, b) => b.membersK - a.membersK)
+  const sorted = [...animeList].sort((a, b) => b.membersK - a.membersK)
   const top3 = sorted.slice(0, 3)
   const rest = sorted.slice(3, 20)
 

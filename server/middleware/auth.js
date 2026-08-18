@@ -67,3 +67,18 @@ export async function optionalAuthenticate(req, res, next) {
     next();
   }
 }
+
+export async function requireAdmin(req, res, next) {
+  try {
+    await authenticate(req, res, () => {
+      if (!req.user || req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Forbidden: Administrator privileges required' });
+      }
+      next();
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error in authorization' });
+  }
+}
+
+

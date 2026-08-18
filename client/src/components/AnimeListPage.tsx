@@ -24,12 +24,12 @@ export default function AnimeListPage({ onAnimeClick }: Props) {
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [page, setPage] = useState(1)
   const [filterOpen, setFilterOpen] = useState(false)
-  const { bookmarks, toggleBookmark } = useApp()
+  const { animeList, bookmarks, toggleBookmark } = useApp()
 
   const toggleGenre = (g: string) => { setPage(1); setGenres(p => p.includes(g) ? p.filter(x => x !== g) : [...p, g]) }
 
   const allFiltered = useMemo(() => {
-    let list = [...animeData]
+    let list = [...animeList]
     if (search) list = list.filter(a => a.title.toLowerCase().includes(search.toLowerCase()) || a.studio.toLowerCase().includes(search.toLowerCase()) || a.genres.some(g => g.toLowerCase().includes(search.toLowerCase())))
     if (genres.length) list = list.filter(a => genres.every(g => a.genres.includes(g)))
     if (year) list = list.filter(a => String(a.year) === year)

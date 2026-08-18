@@ -21,9 +21,10 @@ import LoginPage from './components/LoginPage'
 import RegisterPage from './components/RegisterPage'
 import ForgotPasswordPage from './components/ForgotPasswordPage'
 import AuthModal from './components/AuthModal'
+import AdminPanel from './components/AdminPanel'
 import { type Anime } from './data/animeData'
 
-export type View = 'home' | 'watch' | 'anime-profile' | 'browse' | 'chat' | 'my-list' | 'profile' | 'trending' | 'schedule' | 'login' | 'register' | 'forgot-password'
+export type View = 'home' | 'watch' | 'anime-profile' | 'browse' | 'chat' | 'my-list' | 'profile' | 'trending' | 'schedule' | 'login' | 'register' | 'forgot-password' | 'admin'
 
 export default function App() {
   const [searchOpen, setSearchOpen] = useState(false)
@@ -128,6 +129,14 @@ export default function App() {
 
         {currentView === 'forgot-password' && (
           <ForgotPasswordPage onNavigate={handleNav} />
+        )}
+
+        {currentView === 'admin' && (
+          <AdminPanel
+            onAnimeClick={handleAnimeClick}
+            onWatch={handleWatch}
+            onNavigateHome={handleHome}
+          />
         )}
       </main>
 
