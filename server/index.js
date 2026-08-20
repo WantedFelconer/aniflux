@@ -8,8 +8,12 @@ import authRoutes from './routes/auth.js';
 import animeRoutes from './routes/anime.js';
 import meRoutes from './routes/me.js';
 import adminRoutes from './routes/admin.js';
+import streamSupervisor from './services/supervisor.js';
 
 dotenv.config();
+
+// Start background stream health supervisor
+streamSupervisor.start();
 
 const app = express();
 const PORT = process.env.BACKEND_PORT || process.env.PORT_API || 5000;

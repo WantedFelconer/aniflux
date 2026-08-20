@@ -185,6 +185,12 @@ CREATE TABLE IF NOT EXISTS episodes (
     episode_number       INT UNSIGNED NOT NULL,
     title                VARCHAR(255) NULL,
     thumbnail_url        VARCHAR(500) NULL,
+    gumlet_url           VARCHAR(500) NULL,
+    gumlet_asset_id      VARCHAR(100) NULL,
+    stream_status        ENUM('healthy', 'broken', 'unverified', 'pending') NOT NULL DEFAULT 'unverified',
+    last_checked_at      DATETIME NULL,
+    error_message        TEXT NULL,
+    subtitle_tracks      JSON NULL,
     duration_seconds     INT UNSIGNED NULL,
     air_date             DATETIME NULL,
     intro_start_seconds  INT UNSIGNED NULL,
@@ -192,9 +198,26 @@ CREATE TABLE IF NOT EXISTS episodes (
     outro_start_seconds  INT UNSIGNED NULL,
     outro_end_seconds    INT UNSIGNED NULL,
     created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_anime_episode (anime_id, episode_number),
     INDEX idx_episode_airdate (air_date),
+    INDEX idx_episode_status (stream_status),
     CONSTRAINT fk_episode_anime FOREIGN KEY (anime_id) REFERENCES anime(anime_id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS stream_error_logs (
+    log_id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    anime_id       BIGINT UNSIGNED NOT NULL,
+    episode_number INT UNSIGNED NOT NULL,
+    stream_url     VARCHAR(500) NOT NULL,
+    error_reason   TEXT NULL,
+    http_status    INT NULL,
+    is_resolved    BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    resolved_at    DATETIME NULL,
+    INDEX idx_error_anime (anime_id),
+    INDEX idx_error_created (created_at),
+    CONSTRAINT fk_error_anime FOREIGN KEY (anime_id) REFERENCES anime(anime_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS favorites (

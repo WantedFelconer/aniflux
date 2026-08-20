@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../db.js';
-import { optionalAuthenticate } from '../middleware/auth.js';
+import { optionalAuthenticate, requireAdmin } from '../middleware/auth.js';
+import { validateGumletUrl, formatGumletEmbedUrl, extractGumletAssetId } from '../services/gumletService.js';
 
 const router = express.Router();
 
@@ -41,12 +42,26 @@ async function formatAnimeRow(conn, animeRow) {
   );
   const tagList = tags.map(t => t.name);
 
-  // Episodes
+  // Episodes with Gumlet Streaming Data
   const [episodes] = await conn.query(
-    `SELECT episode_number, title FROM episodes WHERE anime_id = ? ORDER BY episode_number ASC`,
+    `SELECT episode_number, title, gumlet_url, gumlet_asset_id, stream_status, subtitle_tracks, error_message
+     FROM episodes WHERE anime_id = ? ORDER BY episode_number ASC`,
     [animeId]
   );
+
   const episodeTitles = episodes.map(e => e.title || `Episode ${e.episode_number}`);
+  const streamSources = {};
+  for (const ep of episodes) {
+    const targetUrl = ep.gumlet_url || (animeId <= 3 ? 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8' : '');
+    const assetId = ep.gumlet_asset_id || extractGumletAssetId(targetUrl) || (animeId <= 3 ? '65719bc42b91866ef114bca8' : '');
+    streamSources[ep.episode_number] = {
+      gumletUrl: targetUrl ? formatGumletEmbedUrl(targetUrl) : '',
+      gumletAssetId: assetId,
+      streamStatus: ep.stream_status || (targetUrl ? 'healthy' : 'unverified'),
+      errorMessage: ep.error_message || null,
+      subtitleTracks: typeof ep.subtitle_tracks === 'string' ? JSON.parse(ep.subtitle_tracks) : ep.subtitle_tracks || []
+    };
+  }
 
   // Relations
   const [relations] = await conn.query(
@@ -81,7 +96,7 @@ async function formatAnimeRow(conn, animeRow) {
     malScore: parseFloat(animeRow.mal_score) || 8.5,
     popularity: animeRow.popularity_rank || 1,
     membersK: 1200,
-    studio: studioName || 'Aniflux Studio',
+    studio: studioName || animeRow.studio_name || 'Aniflux Studio',
     producer: producerName || 'Aniplex',
     year: animeRow.season_year || 2024,
     episodes: animeRow.episode_count || episodeTitles.length || 12,
@@ -98,7 +113,9 @@ async function formatAnimeRow(conn, animeRow) {
     characters,
     staff,
     episodeTitles: episodeTitles.length > 0 ? episodeTitles : Array.from({ length: animeRow.episode_count || 12 }, (_, i) => `Episode ${i + 1}`),
-    relations: relationList
+    relations: relationList,
+    gumletUrl: animeRow.gumlet_url || (animeId <= 3 ? 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8' : ''),
+    streamSources
   };
 }
 
@@ -154,7 +171,6 @@ router.get('/search', async (req, res) => {
 
     const searchPattern = `%${queryStr}%`;
 
-    // Query main title, japanese_title, alternative titles, description
     const [countRes] = await db.query(
       `SELECT COUNT(DISTINCT a.anime_id) as total
        FROM anime a
@@ -223,6 +239,121 @@ router.get('/:id', optionalAuthenticate, async (req, res) => {
   } catch (err) {
     console.error('Fetch anime details error:', err);
     return res.status(500).json({ error: 'Failed to fetch anime details' });
+  }
+});
+
+// 4. GET EPISODES WITH GUMLET STREAMS (/api/anime/:id/episodes)
+router.get('/:id/episodes', async (req, res) => {
+  try {
+    const animeId = parseInt(req.params.id);
+    if (isNaN(animeId)) {
+      return res.status(400).json({ error: 'Invalid anime ID' });
+    }
+
+    const [animeRows] = await db.query('SELECT * FROM anime WHERE anime_id = ?', [animeId]);
+    if (animeRows.length === 0) {
+      return res.status(404).json({ error: 'Anime not found' });
+    }
+
+    const [episodes] = await db.query(
+      `SELECT episode_number, title, gumlet_url, gumlet_asset_id, stream_status, last_checked_at, error_message, subtitle_tracks
+       FROM episodes WHERE anime_id = ? ORDER BY episode_number ASC`,
+      [animeId]
+    );
+
+    const formattedEpisodes = episodes.map(ep => {
+      const targetUrl = ep.gumlet_url || (animeId <= 3 ? 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8' : '');
+      const assetId = ep.gumlet_asset_id || extractGumletAssetId(targetUrl);
+      return {
+        episodeNumber: ep.episode_number,
+        title: ep.title || `Episode ${ep.episode_number}`,
+        gumletUrl: targetUrl,
+        embedUrl: targetUrl ? formatGumletEmbedUrl(targetUrl) : '',
+        assetId,
+        streamStatus: ep.stream_status || (targetUrl ? 'healthy' : 'unverified'),
+        lastCheckedAt: ep.last_checked_at,
+        errorMessage: ep.error_message,
+        subtitleTracks: typeof ep.subtitle_tracks === 'string' ? JSON.parse(ep.subtitle_tracks) : ep.subtitle_tracks || []
+      };
+    });
+
+    return res.json({
+      animeId,
+      animeTitle: animeRows[0].title,
+      totalEpisodes: formattedEpisodes.length,
+      episodes: formattedEpisodes
+    });
+  } catch (err) {
+    console.error('Fetch anime episodes error:', err);
+    return res.status(500).json({ error: 'Failed to fetch anime episodes' });
+  }
+});
+
+// 5. POST / UPDATE EPISODE WITH GUMLET LINK (/api/anime/:id/episodes)
+router.post('/:id/episodes', requireAdmin, async (req, res) => {
+  try {
+    const animeId = parseInt(req.params.id);
+    if (isNaN(animeId)) return res.status(400).json({ error: 'Invalid anime ID' });
+
+    const {
+      episodeNumber,
+      title,
+      gumletUrl,
+      subtitleTracks,
+      autoValidate = true
+    } = req.body;
+
+    const epNum = parseInt(episodeNumber);
+    if (isNaN(epNum) || epNum < 1) {
+      return res.status(400).json({ error: 'Valid episode number is required' });
+    }
+
+    let validationResult = { valid: true, status: 'unverified', assetId: null };
+    if (gumletUrl && autoValidate) {
+      validationResult = await validateGumletUrl(gumletUrl, true);
+    }
+
+    const assetId = validationResult.assetId || extractGumletAssetId(gumletUrl);
+    const streamStatus = validationResult.valid ? 'healthy' : 'broken';
+    const errorReason = validationResult.valid ? null : validationResult.error;
+
+    await db.upsertEpisode({
+      animeId,
+      episodeNumber: epNum,
+      title: title?.trim() || `Episode ${epNum}`,
+      gumletUrl: gumletUrl?.trim() || '',
+      gumletAssetId: assetId,
+      streamStatus,
+      subtitleTracks: subtitleTracks || []
+    });
+
+    if (!validationResult.valid && gumletUrl) {
+      await db.logStreamError({
+        animeId,
+        episodeNumber: epNum,
+        url: gumletUrl,
+        errorReason,
+        httpStatus: validationResult.httpStatus || 0
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: `Episode ${epNum} stream saved successfully!`,
+      episode: {
+        animeId,
+        episodeNumber: epNum,
+        title: title || `Episode ${epNum}`,
+        gumletUrl,
+        embedUrl: gumletUrl ? formatGumletEmbedUrl(gumletUrl) : '',
+        assetId,
+        streamStatus,
+        validation: validationResult
+      }
+    });
+  } catch (err) {
+    console.error('Save episode stream error:', err);
+    return res.status(500).json({ error: 'Failed to save episode stream' });
   }
 });
 

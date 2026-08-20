@@ -74,6 +74,31 @@ const memoryDb = {
   favorites: new Set(),
   bookmarks: new Set(),
   library: new Map(),
+  streamErrorLogs: [
+    {
+      log_id: 1,
+      anime_id: 1,
+      episode_number: 4,
+      stream_url: 'https://play.gumlet.io/embed/65brokenexample000000',
+      error_reason: 'Gumlet Asset not found (HTTP 404)',
+      http_status: 404,
+      is_resolved: false,
+      created_at: new Date(Date.now() - 3600000)
+    }
+  ],
+  episodeRecords: new Map([
+    // Anime 1
+    ['1:1', { anime_id: 1, episode_number: 1, title: 'The Awakening', gumlet_url: 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8', gumlet_asset_id: '65719bc42b91866ef114bca8', stream_status: 'healthy', last_checked_at: new Date(), error_message: null, subtitle_tracks: [{ label: 'English', src: 'https://example.com/subs/en.vtt', srclang: 'en', default: true }] }],
+    ['1:2', { anime_id: 1, episode_number: 2, title: 'Into the Void', gumlet_url: 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8', gumlet_asset_id: '65719bc42b91866ef114bca8', stream_status: 'healthy', last_checked_at: new Date(), error_message: null }],
+    ['1:3', { anime_id: 1, episode_number: 3, title: 'First Alliance', gumlet_url: 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8', gumlet_asset_id: '65719bc42b91866ef114bca8', stream_status: 'healthy', last_checked_at: new Date(), error_message: null }],
+    ['1:4', { anime_id: 1, episode_number: 4, title: 'The Price of Power', gumlet_url: 'https://play.gumlet.io/embed/65brokenexample000000', gumlet_asset_id: '65brokenexample000000', stream_status: 'broken', last_checked_at: new Date(Date.now() - 3600000), error_message: 'Gumlet Asset not found (HTTP 404)' }],
+    // Anime 2
+    ['2:1', { anime_id: 2, episode_number: 1, title: 'First Blade', gumlet_url: 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8', gumlet_asset_id: '65719bc42b91866ef114bca8', stream_status: 'healthy', last_checked_at: new Date(), error_message: null }],
+    ['2:2', { anime_id: 2, episode_number: 2, title: 'Edge of Memory', gumlet_url: 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8', gumlet_asset_id: '65719bc42b91866ef114bca8', stream_status: 'healthy', last_checked_at: new Date(), error_message: null }],
+    ['2:3', { anime_id: 2, episode_number: 3, title: 'The Second Seal', gumlet_url: 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8', gumlet_asset_id: '65719bc42b91866ef114bca8', stream_status: 'healthy', last_checked_at: new Date(), error_message: null }],
+    // Anime 3
+    ['3:1', { anime_id: 3, episode_number: 1, title: 'Blackout', gumlet_url: 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8', gumlet_asset_id: '65719bc42b91866ef114bca8', stream_status: 'healthy', last_checked_at: new Date(), error_message: null }],
+  ]),
   anime: [
     {
       anime_id: 1, title: 'Void Chronicle: Reborn', japanese_title: 'ヴォイド・クロニクル：リボーン',
@@ -234,9 +259,28 @@ async function executeMemoryQuery(sql, params = []) {
   }
 
   if (cleanSql.includes('FROM episodes WHERE anime_id = ?')) {
-    const anime = memoryDb.anime.find(a => a.anime_id === parseInt(params[0]));
-    const epList = (anime?.episodes || ['Episode 1']).map((title, idx) => ({ episode_number: idx + 1, title }));
-    return [epList];
+    const animeId = parseInt(params[0]);
+    const anime = memoryDb.anime.find(a => a.anime_id === animeId);
+    const epCount = anime?.episodes?.length || anime?.episode_count || 12;
+    const results = [];
+    for (let i = 1; i <= epCount; i++) {
+      const key = `${animeId}:${i}`;
+      const rec = memoryDb.episodeRecords.get(key);
+      const defaultTitle = anime?.episodes?.[i - 1] || `Episode ${i}`;
+      results.push({
+        episode_id: i,
+        anime_id: animeId,
+        episode_number: i,
+        title: rec?.title || defaultTitle,
+        gumlet_url: rec?.gumlet_url || (animeId <= 3 ? 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8' : null),
+        gumlet_asset_id: rec?.gumlet_asset_id || (animeId <= 3 ? '65719bc42b91866ef114bca8' : null),
+        stream_status: rec?.stream_status || (animeId <= 3 ? 'healthy' : 'unverified'),
+        last_checked_at: rec?.last_checked_at || new Date(),
+        error_message: rec?.error_message || null,
+        subtitle_tracks: rec?.subtitle_tracks || null
+      });
+    }
+    return [results];
   }
 
   if (cleanSql.includes('FROM related_anime WHERE anime_id = ?')) {
@@ -513,6 +557,165 @@ const db = {
     }
     return executeMemoryQuery(sql, params);
   },
+
+  async getAllEpisodesForAudit() {
+    if (pool) {
+      try {
+        const [rows] = await pool.query(`
+          SELECT e.episode_id, e.anime_id, e.episode_number, e.title, e.gumlet_url, e.gumlet_asset_id,
+                 e.stream_status, e.last_checked_at, e.error_message, a.title as anime_title
+          FROM episodes e
+          JOIN anime a ON e.anime_id = a.anime_id
+          ORDER BY e.anime_id ASC, e.episode_number ASC
+        `);
+        if (rows.length > 0) return rows;
+      } catch {
+        // Fallback to memory
+      }
+    }
+
+    const results = [];
+    for (const anime of memoryDb.anime) {
+      const epCount = anime.episodes?.length || anime.episode_count || 12;
+      for (let i = 1; i <= epCount; i++) {
+        const key = `${anime.anime_id}:${i}`;
+        const rec = memoryDb.episodeRecords.get(key);
+        results.push({
+          episode_id: i,
+          anime_id: anime.anime_id,
+          episode_number: i,
+          title: rec?.title || anime.episodes?.[i - 1] || `Episode ${i}`,
+          gumlet_url: rec?.gumlet_url || (anime.anime_id <= 3 ? 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8' : null),
+          gumlet_asset_id: rec?.gumlet_asset_id || (anime.anime_id <= 3 ? '65719bc42b91866ef114bca8' : null),
+          stream_status: rec?.stream_status || (anime.anime_id <= 3 ? 'healthy' : 'unverified'),
+          last_checked_at: rec?.last_checked_at || new Date(),
+          error_message: rec?.error_message || null,
+          anime_title: anime.title
+        });
+      }
+    }
+    return results;
+  },
+
+  async updateEpisodeStreamStatus({ animeId, episodeNumber, streamStatus, lastCheckedAt, errorMessage, gumletAssetId }) {
+    if (pool) {
+      try {
+        await pool.query(
+          `UPDATE episodes SET
+            stream_status = ?, last_checked_at = ?, error_message = ?, gumlet_asset_id = COALESCE(?, gumlet_asset_id)
+           WHERE anime_id = ? AND episode_number = ?`,
+          [streamStatus, lastCheckedAt, errorMessage, gumletAssetId, animeId, episodeNumber]
+        );
+      } catch {
+        // Fallback to memory
+      }
+    }
+
+    const key = `${animeId}:${episodeNumber}`;
+    const existing = memoryDb.episodeRecords.get(key) || {
+      anime_id: animeId,
+      episode_number: episodeNumber,
+      title: `Episode ${episodeNumber}`
+    };
+
+    memoryDb.episodeRecords.set(key, {
+      ...existing,
+      stream_status: streamStatus,
+      last_checked_at: lastCheckedAt,
+      error_message: errorMessage,
+      gumlet_asset_id: gumletAssetId || existing.gumlet_asset_id
+    });
+  },
+
+  async logStreamError({ animeId, episodeNumber, url, errorReason, httpStatus }) {
+    if (pool) {
+      try {
+        await pool.query(
+          `INSERT INTO stream_error_logs (anime_id, episode_number, stream_url, error_reason, http_status)
+           VALUES (?, ?, ?, ?, ?)`,
+          [animeId, episodeNumber, url, errorReason, httpStatus]
+        );
+      } catch {
+        // Fallback to memory
+      }
+    }
+
+    memoryDb.streamErrorLogs.unshift({
+      log_id: memoryDb.streamErrorLogs.length + 1,
+      anime_id: animeId,
+      episode_number: episodeNumber,
+      stream_url: url,
+      error_reason: errorReason,
+      http_status: httpStatus,
+      is_resolved: false,
+      created_at: new Date()
+    });
+  },
+
+  async getBrokenStreamReports() {
+    if (pool) {
+      try {
+        const [logs] = await pool.query(`
+          SELECT l.*, a.title as anime_title
+          FROM stream_error_logs l
+          JOIN anime a ON l.anime_id = a.anime_id
+          ORDER BY l.created_at DESC
+          LIMIT 100
+        `);
+        return logs;
+      } catch {
+        // Fallback to memory
+      }
+    }
+
+    return memoryDb.streamErrorLogs.map(l => {
+      const anime = memoryDb.anime.find(a => a.anime_id === l.anime_id);
+      return {
+        ...l,
+        anime_title: anime?.title || `Anime #${l.anime_id}`
+      };
+    });
+  },
+
+  async upsertEpisode({ animeId, episodeNumber, title, gumletUrl, gumletAssetId, streamStatus = 'unverified', subtitleTracks = null }) {
+    if (pool) {
+      try {
+        await pool.query(
+          `INSERT INTO episodes (anime_id, episode_number, title, gumlet_url, gumlet_asset_id, stream_status, subtitle_tracks)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             title = COALESCE(?, title),
+             gumlet_url = VALUES(gumlet_url),
+             gumlet_asset_id = VALUES(gumlet_asset_id),
+             stream_status = VALUES(stream_status),
+             subtitle_tracks = VALUES(subtitle_tracks),
+             last_checked_at = NOW()`,
+          [animeId, episodeNumber, title, gumletUrl, gumletAssetId, streamStatus, JSON.stringify(subtitleTracks), title]
+        );
+      } catch {
+        // Fallback to memory
+      }
+    }
+
+    const key = `${animeId}:${episodeNumber}`;
+    const existing = memoryDb.episodeRecords.get(key) || {
+      anime_id: animeId,
+      episode_number: episodeNumber,
+      title: title || `Episode ${episodeNumber}`
+    };
+
+    memoryDb.episodeRecords.set(key, {
+      ...existing,
+      title: title || existing.title,
+      gumlet_url: gumletUrl,
+      gumlet_asset_id: gumletAssetId,
+      stream_status: streamStatus,
+      subtitle_tracks: subtitleTracks,
+      last_checked_at: new Date()
+    });
+    return true;
+  },
+
   async end() {
     if (pool) {
       try {

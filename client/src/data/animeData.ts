@@ -32,9 +32,19 @@ export interface Anime {
   staff: StaffMember[]
   episodeTitles: string[]
   relations: { type: string; animeId: number }[]
-  gdriveUrl?: string
-  personalServerUrl?: string
-  streamSources?: Record<number, { gdrive?: string; personalServer?: string; direct?: string }>
+  gumletUrl?: string
+  gumletAssetId?: string
+  streamStatus?: 'healthy' | 'broken' | 'unverified' | 'pending'
+  streamSources?: Record<
+    number,
+    {
+      gumletUrl?: string
+      gumletAssetId?: string
+      streamStatus?: 'healthy' | 'broken' | 'unverified' | 'pending'
+      errorMessage?: string | null
+      subtitleTracks?: { label: string; src: string; srclang: string; default?: boolean }[]
+    }
+  >
 }
 
 export interface Character {

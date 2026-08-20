@@ -211,14 +211,23 @@ async function seed() {
       await conn.query('INSERT IGNORE INTO anime_tags (anime_id, tag_id) VALUES (?, ?)', [item.id, tagId]);
     }
 
-    // 8. Episodes
+    // 8. Episodes with Gumlet Streaming Data
     if (item.episodes) {
       for (let epIdx = 0; epIdx < item.episodes.length; epIdx++) {
+        const epNum = epIdx + 1;
+        const gumletUrl = item.id <= 3 ? 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8' : null;
+        const assetId = gumletUrl ? '65719bc42b91866ef114bca8' : null;
+        const streamStatus = gumletUrl ? 'healthy' : 'unverified';
+
         await conn.query(
-          `INSERT INTO episodes (anime_id, episode_number, title, duration_seconds)
-           VALUES (?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE title=VALUES(title)`,
-          [item.id, epIdx + 1, item.episodes[epIdx], (item.duration_minutes || 24) * 60]
+          `INSERT INTO episodes (anime_id, episode_number, title, duration_seconds, gumlet_url, gumlet_asset_id, stream_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             title=VALUES(title),
+             gumlet_url=COALESCE(gumlet_url, VALUES(gumlet_url)),
+             gumlet_asset_id=COALESCE(gumlet_asset_id, VALUES(gumlet_asset_id)),
+             stream_status=COALESCE(stream_status, VALUES(stream_status))`,
+          [item.id, epNum, item.episodes[epIdx], (item.duration_minutes || 24) * 60, gumletUrl, assetId, streamStatus]
         );
       }
     }
@@ -229,7 +238,13 @@ async function seed() {
     "INSERT IGNORE INTO related_anime (anime_id, related_anime_id, relation_type) VALUES (1, 6, 'side_story'), (2, 8, 'prequel'), (8, 2, 'sequel')"
   );
 
-  console.log('Database successfully seeded!');
+  // Seed sample stream error log for testing supervisor
+  await conn.query(
+    `INSERT IGNORE INTO stream_error_logs (anime_id, episode_number, stream_url, error_reason, http_status)
+     VALUES (1, 4, 'https://play.gumlet.io/embed/65brokenexample000000', 'Gumlet Asset not found (HTTP 404)', 404)`
+  );
+
+  console.log('Database successfully seeded with Gumlet video streaming support!');
   await conn.end();
 }
 

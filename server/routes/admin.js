@@ -1,6 +1,8 @@
 import express from 'express';
 import db from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
+import { validateGumletUrl, formatGumletEmbedUrl, extractGumletAssetId } from '../services/gumletService.js';
+import { streamSupervisor } from '../services/supervisor.js';
 
 const router = express.Router();
 
@@ -13,14 +15,18 @@ router.get('/stats', async (req, res) => {
     const [animeCountRes] = await db.query('SELECT COUNT(*) as total FROM anime');
     const [userCountRes] = await db.query('SELECT COUNT(*) as total FROM users');
     const [epCountRes] = await db.query('SELECT COUNT(*) as total FROM episodes');
+    const brokenLogs = await db.getBrokenStreamReports();
+    const unresolvedErrors = brokenLogs.filter(l => !l.is_resolved);
 
     return res.json({
       stats: {
         totalAnime: animeCountRes[0]?.total || 0,
         totalUsers: userCountRes[0]?.total || 0,
         totalEpisodes: epCountRes[0]?.total || 0,
-        activeStreams: (animeCountRes[0]?.total || 0) * 2,
+        brokenLinksCount: unresolvedErrors.length,
+        streamingEngine: 'Gumlet Video Adaptive Player (HLS/Dash/MP4)',
         storageMode: process.env.DB_HOST ? 'MySQL Cloud' : 'In-Memory Mock',
+        supervisorStatus: streamSupervisor.getStatus(),
         serverTime: new Date().toISOString()
       }
     });
@@ -30,7 +36,107 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// 2. CREATE NEW ANIME
+// 2. REAL-TIME GUMLET URL VALIDATION ENDPOINT
+router.post('/episodes/validate', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url || typeof url !== 'string' || !url.trim()) {
+      return res.status(400).json({
+        valid: false,
+        error: 'Please provide a valid Gumlet video URL or Asset ID.'
+      });
+    }
+
+    const validation = await validateGumletUrl(url.trim(), true);
+    return res.json({
+      success: true,
+      url: url.trim(),
+      ...validation
+    });
+  } catch (err) {
+    console.error('Validate Gumlet URL error:', err);
+    return res.status(500).json({
+      valid: false,
+      error: `Validation error: ${err.message}`
+    });
+  }
+});
+
+// 3. GET BROKEN STREAMS / HEALTH MONITOR REPORTS
+router.get('/broken-links', async (req, res) => {
+  try {
+    const brokenLogs = await db.getBrokenStreamReports();
+    const allEpisodes = await db.getAllEpisodesForAudit();
+    const brokenEpisodes = allEpisodes.filter(e => e.stream_status === 'broken');
+
+    return res.json({
+      summary: {
+        totalAudited: allEpisodes.length,
+        healthyCount: allEpisodes.filter(e => e.stream_status === 'healthy').length,
+        brokenCount: brokenEpisodes.length,
+        unverifiedCount: allEpisodes.filter(e => e.stream_status === 'unverified').length,
+        lastAudit: streamSupervisor.getStatus().lastAudit
+      },
+      brokenEpisodes,
+      errorLogs: brokenLogs
+    });
+  } catch (err) {
+    console.error('Fetch broken streams error:', err);
+    return res.status(500).json({ error: 'Failed to fetch stream health reports' });
+  }
+});
+
+// 4. TRIGGER INSTANT SELF-SUPERVISED CATALOG AUDIT
+router.post('/broken-links/scan-now', async (req, res) => {
+  try {
+    const auditResult = await streamSupervisor.runAudit('admin_manual');
+    return res.json({
+      success: true,
+      message: 'Self-supervised catalog stream audit completed!',
+      audit: auditResult
+    });
+  } catch (err) {
+    console.error('Trigger scan error:', err);
+    return res.status(500).json({ error: 'Failed to run stream audit' });
+  }
+});
+
+// 5. REPAIR / UPDATE A BROKEN STREAM LINK
+router.post('/broken-links/repair', async (req, res) => {
+  try {
+    const { animeId, episodeNumber, newGumletUrl } = req.body;
+    if (!animeId || !episodeNumber || !newGumletUrl) {
+      return res.status(400).json({ error: 'animeId, episodeNumber, and newGumletUrl are required' });
+    }
+
+    const validation = await validateGumletUrl(newGumletUrl, true);
+    const assetId = validation.assetId || extractGumletAssetId(newGumletUrl);
+    const streamStatus = validation.valid ? 'healthy' : 'broken';
+
+    await db.upsertEpisode({
+      animeId: parseInt(animeId),
+      episodeNumber: parseInt(episodeNumber),
+      gumletUrl: newGumletUrl.trim(),
+      gumletAssetId: assetId,
+      streamStatus
+    });
+
+    return res.json({
+      success: true,
+      message: validation.valid
+        ? `Episode stream repaired and verified as healthy! ✨`
+        : `Stream updated, but validation reported: ${validation.error || 'Check URL'}`,
+      streamStatus,
+      embedUrl: formatGumletEmbedUrl(newGumletUrl),
+      validation
+    });
+  } catch (err) {
+    console.error('Repair broken link error:', err);
+    return res.status(500).json({ error: 'Failed to repair stream link' });
+  }
+});
+
+// 6. CREATE NEW ANIME
 router.post('/anime', async (req, res) => {
   try {
     const {
@@ -51,8 +157,7 @@ router.post('/anime', async (req, res) => {
       studio = 'Aniflux Studio',
       genres = ['Action', 'Fantasy'],
       tags = ['Adventure'],
-      gdriveUrl,
-      personalServerUrl
+      gumletUrl
     } = req.body;
 
     if (!title || !title.trim()) {
@@ -86,6 +191,16 @@ router.post('/anime', async (req, res) => {
 
     const newAnimeId = insertResult.insertId;
 
+    if (gumletUrl) {
+      await db.upsertEpisode({
+        animeId: newAnimeId,
+        episodeNumber: 1,
+        title: 'Episode 1',
+        gumletUrl: gumletUrl.trim(),
+        gumletAssetId: extractGumletAssetId(gumletUrl)
+      });
+    }
+
     return res.status(201).json({
       success: true,
       message: `Anime "${title}" created successfully`,
@@ -108,8 +223,7 @@ router.post('/anime', async (req, res) => {
         studio,
         genres: Array.isArray(genres) ? genres : ['Action', 'Fantasy'],
         tags: Array.isArray(tags) ? tags : ['Adventure'],
-        gdriveUrl,
-        personalServerUrl
+        gumletUrl
       }
     });
   } catch (err) {
@@ -118,7 +232,7 @@ router.post('/anime', async (req, res) => {
   }
 });
 
-// 3. UPDATE ANIME
+// 7. UPDATE ANIME
 router.put('/anime/:id', async (req, res) => {
   try {
     const animeId = parseInt(req.params.id);
@@ -178,7 +292,7 @@ router.put('/anime/:id', async (req, res) => {
   }
 });
 
-// 4. DELETE ANIME
+// 8. DELETE ANIME
 router.delete('/anime/:id', async (req, res) => {
   try {
     const animeId = parseInt(req.params.id);

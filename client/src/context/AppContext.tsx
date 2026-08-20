@@ -69,7 +69,13 @@ interface AppContextValue {
   updateEpisodeStreams: (
     animeId: number,
     epNum: number,
-    streams: { gdrive?: string; personalServer?: string; direct?: string }
+    streams: {
+      gumletUrl?: string
+      gumletAssetId?: string
+      streamStatus?: 'healthy' | 'broken' | 'unverified' | 'pending'
+      errorMessage?: string | null
+      subtitleTracks?: any[]
+    }
   ) => Promise<boolean>
 }
 
@@ -383,8 +389,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       staff: newAnimeData.staff || [],
       episodeTitles: newAnimeData.episodeTitles || Array.from({ length: newAnimeData.episodes || 12 }, (_, i) => `Episode ${i + 1}`),
       relations: newAnimeData.relations || [],
-      gdriveUrl: newAnimeData.gdriveUrl,
-      personalServerUrl: newAnimeData.personalServerUrl,
+      gumletUrl: newAnimeData.gumletUrl,
+      gumletAssetId: newAnimeData.gumletAssetId,
+      streamStatus: newAnimeData.streamStatus || 'unverified',
       streamSources: newAnimeData.streamSources || {},
     }
 
@@ -413,8 +420,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           studio: completeAnime.studio,
           genres: completeAnime.genres,
           tags: completeAnime.tags,
-          gdriveUrl: completeAnime.gdriveUrl,
-          personalServerUrl: completeAnime.personalServerUrl,
+          gumletUrl: completeAnime.gumletUrl,
         }),
       })
       return true
@@ -478,7 +484,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (
       animeId: number,
       epNum: number,
-      streams: { gdrive?: string; personalServer?: string; direct?: string }
+      streams: {
+        gumletUrl?: string
+        gumletAssetId?: string
+        streamStatus?: 'healthy' | 'broken' | 'unverified' | 'pending'
+        errorMessage?: string | null
+        subtitleTracks?: any[]
+      }
     ): Promise<boolean> => {
       setAnimeList(prev =>
         prev.map(a => {
@@ -495,6 +507,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return a
         })
       )
+
+      try {
+        await fetch(`/api/anime/${animeId}/episodes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            episodeNumber: epNum,
+            gumletUrl: streams.gumletUrl,
+            subtitleTracks: streams.subtitleTracks,
+            autoValidate: true
+          })
+        })
+      } catch {
+        // Continue optimistically
+      }
+
       return true
     },
     []
