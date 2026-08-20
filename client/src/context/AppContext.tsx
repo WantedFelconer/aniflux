@@ -361,11 +361,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Fetch initial anime catalog from backend database
   const fetchCatalog = useCallback(async () => {
     try {
-      const res = await fetch('/api/anime?limit=100', { credentials: 'include' })
+      const res = await fetch('/api/anime?limit=200', { credentials: 'include' })
       if (res.ok) {
         const json = await res.json()
         if (Array.isArray(json.data) && json.data.length > 0) {
-          setAnimeList(json.data)
+          setAnimeList(prev => {
+            const map = new Map<number, Anime>()
+            for (const item of json.data) map.set(item.id, item)
+            for (const item of prev) {
+              if (!map.has(item.id)) map.set(item.id, item)
+            }
+            return Array.from(map.values())
+          })
         }
       }
     } catch (err) {

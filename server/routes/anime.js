@@ -114,7 +114,8 @@ async function formatAnimeRow(conn, animeRow) {
     staff,
     episodeTitles: episodeTitles.length > 0 ? episodeTitles : Array.from({ length: animeRow.episode_count || 12 }, (_, i) => `Episode ${i + 1}`),
     relations: relationList,
-    gumletUrl: animeRow.gumlet_url || (animeId <= 3 ? 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8' : ''),
+    gumletUrl: episodes.find(e => e.episode_number === 1)?.gumlet_url || (animeId <= 3 ? 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8' : ''),
+    gumletAssetId: episodes.find(e => e.episode_number === 1)?.gumlet_asset_id || extractGumletAssetId(episodes.find(e => e.episode_number === 1)?.gumlet_url || '') || '',
     streamSources
   };
 }
