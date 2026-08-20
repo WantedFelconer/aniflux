@@ -1,12 +1,12 @@
 import express from 'express';
-import db, { memoryDb } from '../db.js';
+import db from '../db.js';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.js';
 
 const router = express.Router({ mergeParams: true });
 
 // 1. GET ALL COMMENTS FOR AN EPISODE
-// Route: GET /api/anime/:id/episodes/:epNumber/comments
-router.get('/', optionalAuthenticate, async (req, res) => {
+// Supports both /anime/:id/episodes/:epNumber/comments and /:id/episodes/:epNumber/comments
+const handleGetComments = async (req, res) => {
   try {
     const animeId = parseInt(req.params.id);
     const episodeNumber = parseInt(req.params.epNumber);
@@ -34,13 +34,16 @@ router.get('/', optionalAuthenticate, async (req, res) => {
 
     // Fetch user likes for these comments if user is logged in
     let likedCommentIds = new Set();
-    if (currentUserId && rows.length > 0) {
+    if (currentUserId && rows && rows.length > 0) {
       try {
+        const commentIds = rows.map(r => r.comment_id);
         const [likes] = await db.query(
           `SELECT comment_id FROM episode_comment_likes WHERE user_id = ? AND comment_id IN (?)`,
-          [currentUserId, rows.map(r => r.comment_id)]
+          [currentUserId, commentIds]
         );
-        likedCommentIds = new Set(likes.map(l => l.comment_id));
+        if (Array.isArray(likes)) {
+          likedCommentIds = new Set(likes.map(l => l.comment_id));
+        }
       } catch {
         // Fallback
       }
@@ -50,36 +53,38 @@ router.get('/', optionalAuthenticate, async (req, res) => {
     const topLevelComments = [];
     const replyMap = new Map();
 
-    for (const row of rows) {
-      const formatted = {
-        id: row.comment_id,
-        animeId: row.anime_id,
-        episodeNumber: row.episode_number,
-        userId: row.user_id,
-        parentId: row.parent_id,
-        text: row.comment_text,
-        isSpoiler: Boolean(row.is_spoiler),
-        likesCount: row.likes_count || 0,
-        createdAt: row.created_at,
-        user: {
-          id: row.user_id,
-          username: row.username,
-          avatarUrl: row.avatar_url,
-          avatarInitial: (row.username?.[0] || 'U').toUpperCase(),
-          level: row.level || 1,
-          role: row.role || 'member'
-        },
-        hasLiked: likedCommentIds.has(row.comment_id),
-        replies: []
-      };
+    if (Array.isArray(rows)) {
+      for (const row of rows) {
+        const formatted = {
+          id: row.comment_id,
+          animeId: row.anime_id,
+          episodeNumber: row.episode_number,
+          userId: row.user_id,
+          parentId: row.parent_id,
+          text: row.comment_text,
+          isSpoiler: Boolean(row.is_spoiler),
+          likesCount: row.likes_count || 0,
+          createdAt: row.created_at,
+          user: {
+            id: row.user_id,
+            username: row.username,
+            avatarUrl: row.avatar_url,
+            avatarInitial: (row.username?.[0] || 'U').toUpperCase(),
+            level: row.level || 1,
+            role: row.role || 'member'
+          },
+          hasLiked: likedCommentIds.has(row.comment_id),
+          replies: []
+        };
 
-      if (!row.parent_id) {
-        topLevelComments.push(formatted);
-      } else {
-        if (!replyMap.has(row.parent_id)) {
-          replyMap.set(row.parent_id, []);
+        if (!row.parent_id) {
+          topLevelComments.push(formatted);
+        } else {
+          if (!replyMap.has(row.parent_id)) {
+            replyMap.set(row.parent_id, []);
+          }
+          replyMap.get(row.parent_id).push(formatted);
         }
-        replyMap.get(row.parent_id).push(formatted);
       }
     }
 
@@ -94,22 +99,25 @@ router.get('/', optionalAuthenticate, async (req, res) => {
       success: true,
       animeId,
       episodeNumber,
-      totalComments: rows.length,
+      totalComments: rows ? rows.length : 0,
       comments: topLevelComments
     });
   } catch (err) {
     console.error('Fetch episode comments error:', err);
     return res.status(500).json({ error: 'Failed to fetch episode comments' });
   }
-});
+};
+
+router.get('/anime/:id/episodes/:epNumber/comments', optionalAuthenticate, handleGetComments);
+router.get('/:id/episodes/:epNumber/comments', optionalAuthenticate, handleGetComments);
+router.get('/', optionalAuthenticate, handleGetComments);
 
 // 2. POST A NEW COMMENT FOR AN EPISODE (Registered Users Only)
-// Route: POST /api/anime/:id/episodes/:epNumber/comments
-router.post('/', authenticate, async (req, res) => {
+const handlePostComment = async (req, res) => {
   try {
     const animeId = parseInt(req.params.id);
     const episodeNumber = parseInt(req.params.epNumber);
-    const userId = req.user.user_id;
+    const user = req.user;
     const { commentText, isSpoiler = false, parentId = null } = req.body;
 
     if (isNaN(animeId) || isNaN(episodeNumber)) {
@@ -120,6 +128,10 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Comment text cannot be empty' });
     }
 
+    if (!user) {
+      return res.status(401).json({ error: 'Please sign in or register to join the discussion.' });
+    }
+
     if (commentText.trim().length > 2000) {
       return res.status(400).json({ error: 'Comment cannot exceed 2000 characters' });
     }
@@ -127,28 +139,28 @@ router.post('/', authenticate, async (req, res) => {
     const [insertResult] = await db.query(
       `INSERT INTO episode_comments (anime_id, episode_number, user_id, parent_id, comment_text, is_spoiler)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [animeId, episodeNumber, userId, parentId ? parseInt(parentId) : null, commentText.trim(), Boolean(isSpoiler)]
+      [animeId, episodeNumber, user.user_id, parentId ? parseInt(parentId) : null, commentText.trim(), Boolean(isSpoiler)]
     );
 
-    const commentId = insertResult.insertId || Date.now();
+    const commentId = insertResult?.insertId || Date.now();
 
     const createdComment = {
       id: commentId,
       animeId,
       episodeNumber,
-      userId,
+      userId: user.user_id,
       parentId: parentId ? parseInt(parentId) : null,
       text: commentText.trim(),
       isSpoiler: Boolean(isSpoiler),
       likesCount: 0,
       createdAt: new Date().toISOString(),
       user: {
-        id: req.user.user_id,
-        username: req.user.username,
-        avatarUrl: req.user.avatar_url,
-        avatarInitial: (req.user.username?.[0] || 'U').toUpperCase(),
-        level: req.user.level || 1,
-        role: req.user.role || 'member'
+        id: user.user_id,
+        username: user.username,
+        avatarUrl: user.avatar_url,
+        avatarInitial: (user.username?.[0] || 'U').toUpperCase(),
+        level: user.level || 1,
+        role: user.role || 'member'
       },
       hasLiked: false,
       replies: []
@@ -161,20 +173,29 @@ router.post('/', authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error('Post comment error:', err);
-    return res.status(500).json({ error: 'Failed to post comment' });
+    return res.status(500).json({ error: `Failed to post comment: ${err.message}` });
   }
-});
+};
 
-// 3. TOGGLE LIKE ON A COMMENT (Registered Users Only)
-// Route: POST /api/comments/:commentId/like
-router.post('/comments/:commentId/like', authenticate, async (req, res) => {
+router.post('/anime/:id/episodes/:epNumber/comments', optionalAuthenticate, handlePostComment);
+router.post('/:id/episodes/:epNumber/comments', optionalAuthenticate, handlePostComment);
+router.post('/', optionalAuthenticate, handlePostComment);
+
+// 3. TOGGLE LIKE ON A COMMENT
+router.post('/comments/:commentId/like', optionalAuthenticate, async (req, res) => {
   try {
     const commentId = parseInt(req.params.commentId);
-    const userId = req.user.user_id;
+    const user = req.user;
 
     if (isNaN(commentId)) {
       return res.status(400).json({ error: 'Invalid comment ID' });
     }
+
+    if (!user) {
+      return res.status(401).json({ error: 'Please log in to like comments' });
+    }
+
+    const userId = user.user_id;
 
     // Check if user already liked
     const [existing] = await db.query(
@@ -183,7 +204,7 @@ router.post('/comments/:commentId/like', authenticate, async (req, res) => {
     );
 
     let hasLiked = false;
-    if (existing.length > 0) {
+    if (existing && existing.length > 0) {
       // Unlike
       await db.query('DELETE FROM episode_comment_likes WHERE comment_id = ? AND user_id = ?', [commentId, userId]);
       await db.query('UPDATE episode_comments SET likes_count = GREATEST(0, likes_count - 1) WHERE comment_id = ?', [commentId]);
@@ -210,16 +231,18 @@ router.post('/comments/:commentId/like', authenticate, async (req, res) => {
   }
 });
 
-// 4. DELETE A COMMENT (Author or Admin Only)
-// Route: DELETE /api/comments/:commentId
-router.delete('/comments/:commentId', authenticate, async (req, res) => {
+// 4. DELETE A COMMENT
+router.delete('/comments/:commentId', optionalAuthenticate, async (req, res) => {
   try {
     const commentId = parseInt(req.params.commentId);
-    const userId = req.user.user_id;
-    const userRole = req.user.role;
+    const user = req.user;
 
     if (isNaN(commentId)) {
       return res.status(400).json({ error: 'Invalid comment ID' });
+    }
+
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required' });
     }
 
     const [commentRow] = await db.query('SELECT user_id FROM episode_comments WHERE comment_id = ?', [commentId]);
@@ -227,7 +250,7 @@ router.delete('/comments/:commentId', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Comment not found' });
     }
 
-    if (commentRow[0].user_id !== userId && userRole !== 'admin') {
+    if (commentRow[0].user_id !== user.user_id && user.role !== 'admin') {
       return res.status(403).json({ error: 'You are not authorized to delete this comment' });
     }
 
@@ -244,3 +267,4 @@ router.delete('/comments/:commentId', authenticate, async (req, res) => {
 });
 
 export default router;
+

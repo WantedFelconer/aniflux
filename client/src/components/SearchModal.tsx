@@ -43,14 +43,17 @@ export default function SearchModal({ onClose, onAnimeClick }: SearchModalProps)
     }
 
     // Instant local match from live animeList
-    const localMatches = animeList.filter(a =>
-      a.title.toLowerCase().includes(q) ||
-      a.titleJp?.toLowerCase().includes(q) ||
-      a.synopsis?.toLowerCase().includes(q) ||
-      a.studio?.toLowerCase().includes(q) ||
-      a.genres?.some(g => g.toLowerCase().includes(q)) ||
-      a.tags?.some(t => t.toLowerCase().includes(q))
-    )
+    const localMatches = animeList.filter(a => {
+      if (!a) return false
+      return (
+        (a.title || '').toLowerCase().includes(q) ||
+        (a.titleJp || '').toLowerCase().includes(q) ||
+        (a.synopsis || '').toLowerCase().includes(q) ||
+        (a.studio || '').toLowerCase().includes(q) ||
+        (Array.isArray(a.genres) && a.genres.some(g => (g || '').toLowerCase().includes(q))) ||
+        (Array.isArray(a.tags) && a.tags.some(t => (t || '').toLowerCase().includes(q)))
+      )
+    })
     setResults(localMatches)
 
     setIsLoading(true)
@@ -64,8 +67,8 @@ export default function SearchModal({ onClose, onAnimeClick }: SearchModalProps)
           if (Array.isArray(json.data)) {
             // Merge & deduplicate by ID
             const map = new Map<number, Anime>()
-            for (const item of localMatches) map.set(item.id, item)
-            for (const item of json.data) map.set(item.id, item)
+            for (const item of localMatches) if (item?.id) map.set(item.id, item)
+            for (const item of json.data) if (item?.id) map.set(item.id, item)
             setResults(Array.from(map.values()))
           }
         }
@@ -186,22 +189,24 @@ export default function SearchModal({ onClose, onAnimeClick }: SearchModalProps)
 }
 
 function ResultRow({ anime, onClick }: { anime: Anime; onClick: (a: Anime) => void }) {
+  const genresStr = Array.isArray(anime.genres) ? anime.genres.join(', ') : (typeof anime.genres === 'string' ? anime.genres : '')
   return (
     <button
       className="flex items-center gap-3 p-2 rounded-xl text-left transition-all hover:bg-white/5 cursor-pointer w-full"
       onClick={() => onClick(anime)}
     >
       <div className="relative shrink-0 w-10 h-14 rounded-lg overflow-hidden">
-        <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" style={{ background: '#1b1d23' }} />
+        <img src={anime.poster || 'https://images.unsplash.com/photo-1672872476232-da16b45c9001?w=1920&h=1080&fit=crop&auto=format'} alt={anime.title || 'Anime'} className="w-full h-full object-cover" style={{ background: '#1b1d23' }} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate text-white">{anime.title}</p>
+        <p className="text-sm font-semibold truncate text-white">{anime.title || 'Untitled Anime'}</p>
         {anime.titleJp && <p className="text-xs truncate" style={{ color: '#888' }}>{anime.titleJp}</p>}
-        <p className="text-xs truncate" style={{ color: '#a0a0a0' }}>{anime.genres ? anime.genres.join(', ') : ''} · {anime.year}</p>
+        <p className="text-xs truncate" style={{ color: '#a0a0a0' }}>{genresStr} {anime.year ? `· ${anime.year}` : ''}</p>
       </div>
       <div className="flex items-center gap-1 shrink-0">
-        <svg width="10" height="10" viewBox="0 0 12 12" fill="#f59e0b"><path d="M6 1l1.3 3.9H11L8.1 7.3l1 3.8L6 9.1l-3.1 2 1-3.8L1 4.9h3.7L6 1z"/></svg>
-        <span className="text-xs font-medium text-white">{anime.rating}</span>
+        <span className="text-xs font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/20">
+          ★ {anime.rating || 8.5}
+        </span>
       </div>
     </button>
   )

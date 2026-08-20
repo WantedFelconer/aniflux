@@ -163,12 +163,15 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
 
   // Filtered Anime List
   const filteredList = useMemo(() => {
+    const q = (searchQuery || '').trim().toLowerCase()
     return animeList.filter(a => {
-      const matchesSearch =
-        a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        a.studio.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (a.titleJp && a.titleJp.toLowerCase().includes(searchQuery.toLowerCase()))
-      const matchesStatus = statusFilter === 'All' || a.status === statusFilter
+      if (!a) return false
+      const titleMatch = (a.title || '').toLowerCase().includes(q)
+      const jpMatch = (a.titleJp || '').toLowerCase().includes(q)
+      const studioMatch = (a.studio || '').toLowerCase().includes(q)
+      const genreMatch = Array.isArray(a.genres) && a.genres.some(g => (g || '').toLowerCase().includes(q))
+      const matchesSearch = !q || titleMatch || jpMatch || studioMatch || genreMatch
+      const matchesStatus = statusFilter === 'All' || (a.status || '').toLowerCase() === statusFilter.toLowerCase()
       return matchesSearch && matchesStatus
     })
   }, [animeList, searchQuery, statusFilter])

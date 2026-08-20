@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'
 import ContinueWatching from './components/ContinueWatching'
@@ -22,11 +22,13 @@ import RegisterPage from './components/RegisterPage'
 import ForgotPasswordPage from './components/ForgotPasswordPage'
 import AuthModal from './components/AuthModal'
 import AdminPanel from './components/AdminPanel'
-import { type Anime } from './data/animeData'
+import { animeData, type Anime } from './data/animeData'
+import { useApp } from './context/AppContext'
 
 export type View = 'home' | 'watch' | 'anime-profile' | 'browse' | 'chat' | 'my-list' | 'profile' | 'trending' | 'schedule' | 'login' | 'register' | 'forgot-password' | 'admin'
 
 export default function App() {
+  const { animeList } = useApp()
   const [searchOpen, setSearchOpen] = useState(false)
   const [currentView, setCurrentView] = useState<View>('home')
   const [watchAnime, setWatchAnime] = useState<Anime | null>(null)
@@ -34,20 +36,63 @@ export default function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authModalView, setAuthModalView] = useState<'login' | 'register' | 'forgot-password'>('login')
 
+  // Parse URL hash to restore view and anime on refresh
+  const syncRouteFromHash = useCallback(() => {
+    try {
+      const hash = window.location.hash.replace(/^#\/?/, '')
+      if (!hash) {
+        setCurrentView('home')
+        return
+      }
+
+      const [route, param] = hash.split('/')
+
+      if (route === 'watch' && param) {
+        const id = parseInt(param)
+        const found = animeList.find(a => a.id === id) || animeData.find(a => a.id === id)
+        if (found) setWatchAnime(found)
+        setCurrentView('watch')
+      } else if (route === 'anime' && param) {
+        const id = parseInt(param)
+        const found = animeList.find(a => a.id === id) || animeData.find(a => a.id === id)
+        if (found) setProfileAnime(found)
+        setCurrentView('anime-profile')
+      } else if (
+        ['browse', 'chat', 'my-list', 'profile', 'trending', 'schedule', 'login', 'register', 'forgot-password', 'admin'].includes(route)
+      ) {
+        setCurrentView(route as View)
+      } else {
+        setCurrentView('home')
+      }
+    } catch {
+      setCurrentView('home')
+    }
+  }, [animeList])
+
+  // Sync on mount and hashchange
+  useEffect(() => {
+    syncRouteFromHash()
+    window.addEventListener('hashchange', syncRouteFromHash)
+    return () => window.removeEventListener('hashchange', syncRouteFromHash)
+  }, [syncRouteFromHash])
+
   const handleWatch = (anime: Anime) => {
     setWatchAnime(anime)
     setCurrentView('watch')
+    window.location.hash = `#/watch/${anime.id}`
     window.scrollTo(0, 0)
   }
 
   const handleAnimeClick = (anime: Anime) => {
     setProfileAnime(anime)
     setCurrentView('anime-profile')
+    window.location.hash = `#/anime/${anime.id}`
     window.scrollTo(0, 0)
   }
 
   const handleNav = (view: View) => {
     setCurrentView(view)
+    window.location.hash = view === 'home' ? '#/' : `#/${view}`
     window.scrollTo(0, 0)
   }
 
@@ -82,17 +127,31 @@ export default function App() {
           </>
         )}
 
-        {currentView === 'watch' && watchAnime && (
-          <WatchPage anime={watchAnime} onBack={handleHome} onAnimeClick={handleAnimeClick} />
+        {currentView === 'watch' && (
+          watchAnime ? (
+            <WatchPage anime={watchAnime} onBack={handleHome} onAnimeClick={handleAnimeClick} />
+          ) : (
+            <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 text-white">
+              <div className="w-10 h-10 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm font-semibold text-gray-400">Loading Anime Stream...</p>
+            </div>
+          )
         )}
 
-        {currentView === 'anime-profile' && profileAnime && (
-          <AnimeProfilePage
-            anime={profileAnime}
-            onBack={() => window.history.length > 1 ? (setCurrentView('home')) : handleHome()}
-            onWatch={handleWatch}
-            onAnimeClick={handleAnimeClick}
-          />
+        {currentView === 'anime-profile' && (
+          profileAnime ? (
+            <AnimeProfilePage
+              anime={profileAnime}
+              onBack={() => window.history.length > 1 ? (window.history.back()) : handleHome()}
+              onWatch={handleWatch}
+              onAnimeClick={handleAnimeClick}
+            />
+          ) : (
+            <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 text-white">
+              <div className="w-10 h-10 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm font-semibold text-gray-400">Loading Profile Details...</p>
+            </div>
+          )
         )}
 
         {currentView === 'browse' && (
@@ -158,4 +217,5 @@ export default function App() {
     </div>
   )
 }
+
 
