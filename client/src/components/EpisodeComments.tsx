@@ -75,9 +75,14 @@ export default function EpisodeComments({
     setIsLoading(true)
     setErrorMsg(null)
     try {
+      const token = localStorage.getItem('aniflux_auth_token')
+      const headers: Record<string, string> = { 'Accept': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      if (authUser?.id) headers['X-User-Id'] = String(authUser.id)
+
       const res = await fetch(
         `/api/anime/${animeId}/episodes/${episodeNumber}/comments?sort=${sort}`,
-        { credentials: 'include' }
+        { headers, credentials: 'include' }
       )
       if (res.ok) {
         const json = await res.json()
@@ -89,7 +94,7 @@ export default function EpisodeComments({
     } finally {
       setIsLoading(false)
     }
-  }, [animeId, episodeNumber, sort])
+  }, [animeId, episodeNumber, sort, authUser])
 
   useEffect(() => {
     fetchComments()
@@ -109,7 +114,9 @@ export default function EpisodeComments({
     setErrorMsg(null)
 
     try {
+      const token = localStorage.getItem('aniflux_auth_token')
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
       if (authUser?.id) headers['X-User-Id'] = String(authUser.id)
 
       const res = await fetch(`/api/anime/${animeId}/episodes/${episodeNumber}/comments`, {
@@ -145,7 +152,9 @@ export default function EpisodeComments({
 
     setIsReplying(true)
     try {
+      const token = localStorage.getItem('aniflux_auth_token')
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
       if (authUser?.id) headers['X-User-Id'] = String(authUser.id)
 
       const res = await fetch(`/api/anime/${animeId}/episodes/${episodeNumber}/comments`, {
@@ -221,8 +230,14 @@ export default function EpisodeComments({
     )
 
     try {
+      const token = localStorage.getItem('aniflux_auth_token')
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      if (authUser?.id) headers['X-User-Id'] = String(authUser.id)
+
       await fetch(`/api/comments/${commentId}/like`, {
         method: 'POST',
+        headers,
         credentials: 'include',
       })
     } catch {
@@ -235,8 +250,14 @@ export default function EpisodeComments({
     if (!confirm('Are you sure you want to delete this comment?')) return
 
     try {
+      const token = localStorage.getItem('aniflux_auth_token')
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      if (authUser?.id) headers['X-User-Id'] = String(authUser.id)
+
       const res = await fetch(`/api/comments/${commentId}`, {
         method: 'DELETE',
+        headers,
         credentials: 'include',
       })
 

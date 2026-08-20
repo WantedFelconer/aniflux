@@ -38,8 +38,14 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 const STORAGE_KEY = 'aniflux_auth_session'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY)
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return null
+  })
+  const [isLoading, setIsLoading] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const [tempResetEmail, setTempResetEmail] = useState<string | null>(null)
   const [resetToken, setResetToken] = useState<string | null>(() => {
@@ -58,24 +64,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true
     async function checkAuth() {
-      setIsLoading(true)
       try {
+        const token = localStorage.getItem('aniflux_auth_token')
+        const headers: Record<string, string> = { 'Accept': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+
         const res = await fetch('/api/auth/me', {
-          headers: { 'Accept': 'application/json' },
+          headers,
           credentials: 'include'
         })
         if (res.ok) {
           const data = await res.json()
           if (isMounted && data.user) {
             setUser(data.user)
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user))
           }
-        } else {
-          if (isMounted) setUser(null)
         }
       } catch (err) {
-        if (isMounted) setUser(null)
-      } finally {
-        if (isMounted) setIsLoading(false)
+        // Keep cached user if network fails
       }
     }
     checkAuth()
@@ -85,8 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (user) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
-    } else {
-      localStorage.removeItem(STORAGE_KEY)
     }
   }, [user])
 
@@ -120,7 +124,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false
       }
 
+      if (data.token) {
+        localStorage.setItem('aniflux_auth_token', data.token)
+      }
       setUser(data.user)
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user))
       if (!rememberMe) {
         sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data.user))
       }
@@ -138,19 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthError(null)
 
     if (!username || !email || !pass) {
-      setAuthError('Please enter a username, email, and password.')
-      setIsLoading(false)
-      return false
-    }
-
-    if (!email.includes('@')) {
-      setAuthError('Please enter a valid email address.')
-      setIsLoading(false)
-      return false
-    }
-
-    if (pass.length < 6) {
-      setAuthError('Password must be at least 6 characters long.')
+      setAuthError('All fields are required.')
       setIsLoading(false)
       return false
     }
@@ -171,7 +167,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false
       }
 
+      if (data.token) {
+        localStorage.setItem('aniflux_auth_token', data.token)
+      }
       setUser(data.user)
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user))
       setIsLoading(false)
       return true
     } catch (err: any) {
@@ -283,12 +283,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+      const token = localStorage.getItem('aniflux_auth_token')
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      await fetch('/api/auth/logout', { method: 'POST', headers, credentials: 'include' })
     } catch {
       // ignore
     }
     setUser(null)
     localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem('aniflux_auth_token')
     sessionStorage.removeItem(STORAGE_KEY)
   }, [])
 
