@@ -90,7 +90,16 @@ const NOTIFS: Notification[] = [
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, user: authUser } = useAuth()
-  const [animeList, setAnimeList] = useState<Anime[]>(animeData)
+  const [animeList, setAnimeList] = useState<Anime[]>(() => {
+    try {
+      const cached = localStorage.getItem('aniflux_cached_catalog')
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch {}
+    return animeData
+  })
   const [listEntries, setListEntries] = useState<Record<number, ListEntry>>({})
   const [bookmarks, setBookmarks] = useState<Set<number>>(new Set())
   const [favorites, setFavorites] = useState<Set<number>>(new Set())
@@ -351,7 +360,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const clearHistory = useCallback(() => setHistory([]), [])
-
   const updateUser = useCallback((patch: Partial<UserState>) => {
     setUser(prev => { const next = { ...prev, ...patch }; next.avatarInitial = (next.username[0] ?? 'A').toUpperCase(); return next })
   }, [])
@@ -371,7 +379,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             for (const item of prev) {
               if (!map.has(item.id)) map.set(item.id, item)
             }
-            return Array.from(map.values())
+            const merged = Array.from(map.values())
+            try {
+              localStorage.setItem('aniflux_cached_catalog', JSON.stringify(merged))
+            } catch {}
+            return merged
           })
         }
       }
@@ -383,6 +395,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     fetchCatalog()
   }, [fetchCatalog])
+
+  // Sync to localStorage whenever animeList changes
+  useEffect(() => {
+    if (animeList && animeList.length > 0) {
+      try {
+        localStorage.setItem('aniflux_cached_catalog', JSON.stringify(animeList))
+      } catch {}
+    }
+  }, [animeList])
 
   // Admin: Add Anime
   const addAnime = useCallback(async (newAnimeData: Partial<Anime>): Promise<boolean> => {
@@ -416,9 +437,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const json = await res.json()
         if (json.anime) {
-          setAnimeList(prev => [json.anime, ...prev.filter(a => a.id !== json.anime.id)])
+          setAnimeList(prev => {
+            const next = [json.anime, ...prev.filter(a => a.id !== json.anime.id)]
+            try { localStorage.setItem('aniflux_cached_catalog', JSON.stringify(next)) } catch {}
+            return next
+          })
         }
-        fetchCatalog()
+        await fetchCatalog()
         return true
       }
     } catch (e) {
@@ -458,10 +483,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       gumletUrl: newAnimeData.gumletUrl,
       gumletAssetId: newAnimeData.gumletAssetId,
       streamStatus: newAnimeData.streamStatus || 'unverified',
-      streamSources: newAnimeData.streamSources || {},
+      streamSources: newAnimeData.streamSources || (newAnimeData.gumletUrl ? {
+        1: {
+          gumletUrl: newAnimeData.gumletUrl,
+          gumletAssetId: newAnimeData.gumletAssetId || '',
+          streamStatus: 'healthy'
+        }
+      } : {}),
     }
 
-    setAnimeList(prev => [completeAnime, ...prev])
+    setAnimeList(prev => {
+      const next = [completeAnime, ...prev]
+      try { localStorage.setItem('aniflux_cached_catalog', JSON.stringify(next)) } catch {}
+      return next
+    })
     return true
   }, [animeList, fetchCatalog])
 
