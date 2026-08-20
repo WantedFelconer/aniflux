@@ -1,4 +1,5 @@
-import { animeData, type Anime } from '../data/animeData'
+import { type Anime } from '../data/animeData'
+import { useApp } from '../context/AppContext'
 import SectionCarousel from './SectionCarousel'
 
 interface TopRatedProps {
@@ -6,7 +7,8 @@ interface TopRatedProps {
 }
 
 export default function TopRated({ onAnimeClick }: TopRatedProps) {
-  const sorted = [...animeData].sort((a, b) => b.malScore - a.malScore)
+  const { animeList } = useApp()
+  const sorted = [...animeList].sort((a, b) => b.malScore - a.malScore)
 
   return (
     <SectionCarousel

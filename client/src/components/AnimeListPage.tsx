@@ -45,7 +45,7 @@ export default function AnimeListPage({ onAnimeClick }: Props) {
     else if (sort === 'Title A-Z') list.sort((a, b) => a.title.localeCompare(b.title))
     else if (sort === 'Episodes ↓') list.sort((a, b) => b.episodes - a.episodes)
     return list
-  }, [search, genres, year, season, status, type, scoreMin, sort])
+  }, [animeList, search, genres, year, season, status, type, scoreMin, sort])
 
   const totalPages = Math.max(1, Math.ceil(allFiltered.length / PER_PAGE))
   const paged = allFiltered.slice((page - 1) * PER_PAGE, page * PER_PAGE)

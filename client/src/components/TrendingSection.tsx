@@ -1,4 +1,5 @@
-import { animeData, type Anime } from '../data/animeData'
+import { type Anime } from '../data/animeData'
+import { useApp } from '../context/AppContext'
 import SectionCarousel from './SectionCarousel'
 
 interface TrendingSectionProps {
@@ -6,13 +7,15 @@ interface TrendingSectionProps {
 }
 
 export default function TrendingSection({ onAnimeClick }: TrendingSectionProps) {
+  const { animeList } = useApp()
+
   return (
     <>
       <div className="py-2">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-6 md:px-10">
           <h2 className="text-xl font-bold mb-5">Trending Today</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {animeData.slice(0, 6).map((anime, i) => (
+            {animeList.slice(0, 6).map((anime, i) => (
               <TrendingCard key={anime.id} anime={anime} rank={i + 1} onClick={onAnimeClick} />
             ))}
           </div>
@@ -21,7 +24,7 @@ export default function TrendingSection({ onAnimeClick }: TrendingSectionProps) 
 
       <SectionCarousel
         title="Popular This Week"
-        anime={animeData.slice(4)}
+        anime={animeList.slice(4)}
         onAnimeClick={onAnimeClick}
         badge={{ text: 'Hot', color: '#ff4db8' }}
       />

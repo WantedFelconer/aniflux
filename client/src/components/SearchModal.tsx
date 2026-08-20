@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { type Anime } from '../data/animeData'
+import { useApp } from '../context/AppContext'
 
 interface SearchModalProps {
   onClose: () => void
@@ -9,11 +10,12 @@ interface SearchModalProps {
 const trending = ['Void Chronicle', 'Celestial Blades', 'Aurora Protocol', 'Neon Requiem', 'Dragon']
 
 export default function SearchModal({ onClose, onAnimeClick }: SearchModalProps) {
+  const { animeList } = useApp()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Anime[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [initialAnime, setInitialAnime] = useState<Anime[]>([])
+  const [initialAnime, setInitialAnime] = useState<Anime[]>(animeList.slice(0, 5))
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -23,32 +25,33 @@ export default function SearchModal({ onClose, onAnimeClick }: SearchModalProps)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Initial load for "All Anime" preview
+  // Sync initial preview with live catalog
   useEffect(() => {
-    let isMounted = true
-    async function fetchInitial() {
-      try {
-        const res = await fetch('/api/anime?limit=5')
-        if (res.ok) {
-          const json = await res.json()
-          if (isMounted && json.data) setInitialAnime(json.data)
-        }
-      } catch {
-        // ignore
-      }
+    if (animeList.length > 0) {
+      setInitialAnime(animeList.slice(0, 5))
     }
-    fetchInitial()
-    return () => { isMounted = false }
-  }, [])
+  }, [animeList])
 
-  // Debounced search query
+  // Search query with real-time local match and backend search merge
   useEffect(() => {
-    if (query.trim().length <= 1) {
+    const q = query.trim().toLowerCase()
+    if (q.length <= 1) {
       setResults([])
       setIsLoading(false)
       setError(null)
       return
     }
+
+    // Instant local match from live animeList
+    const localMatches = animeList.filter(a =>
+      a.title.toLowerCase().includes(q) ||
+      a.titleJp?.toLowerCase().includes(q) ||
+      a.synopsis?.toLowerCase().includes(q) ||
+      a.studio?.toLowerCase().includes(q) ||
+      a.genres?.some(g => g.toLowerCase().includes(q)) ||
+      a.tags?.some(t => t.toLowerCase().includes(q))
+    )
+    setResults(localMatches)
 
     setIsLoading(true)
     setError(null)
@@ -56,21 +59,25 @@ export default function SearchModal({ onClose, onAnimeClick }: SearchModalProps)
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/anime/search?q=${encodeURIComponent(query.trim())}&limit=20`)
-        if (!res.ok) {
-          throw new Error('Search failed')
+        if (res.ok) {
+          const json = await res.json()
+          if (Array.isArray(json.data)) {
+            // Merge & deduplicate by ID
+            const map = new Map<number, Anime>()
+            for (const item of localMatches) map.set(item.id, item)
+            for (const item of json.data) map.set(item.id, item)
+            setResults(Array.from(map.values()))
+          }
         }
-        const json = await res.json()
-        setResults(json.data || [])
       } catch (err: any) {
-        setError(err.message || 'Error executing search')
-        setResults([])
+        // Local matches remain visible
       } finally {
         setIsLoading(false)
       }
-    }, 300)
+    }, 250)
 
     return () => clearTimeout(timer)
-  }, [query])
+  }, [query, animeList])
 
   return (
     <div

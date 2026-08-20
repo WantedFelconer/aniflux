@@ -123,14 +123,14 @@ async function formatAnimeRow(conn, animeRow) {
 router.get('/', async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page || '1'));
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || '20')));
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit || '50')));
     const offset = (page - 1) * limit;
 
     const [countResult] = await db.query('SELECT COUNT(*) as total FROM anime');
-    const total = countResult[0].total;
+    const total = countResult[0]?.total || 0;
 
     const [rows] = await db.query(
-      `SELECT * FROM anime ORDER BY popularity_rank ASC, site_score DESC LIMIT ? OFFSET ?`,
+      `SELECT * FROM anime ORDER BY anime_id DESC, site_score DESC LIMIT ? OFFSET ?`,
       [limit, offset]
     );
 
@@ -159,7 +159,7 @@ router.get('/search', async (req, res) => {
   try {
     const queryStr = (req.query.q || '').toString().trim();
     const page = Math.max(1, parseInt(req.query.page || '1'));
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || '20')));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20')));
     const offset = (page - 1) * limit;
 
     if (!queryStr) {
@@ -178,14 +178,14 @@ router.get('/search', async (req, res) => {
        WHERE a.title LIKE ? OR a.japanese_title LIKE ? OR a.description LIKE ? OR alt.title LIKE ?`,
       [searchPattern, searchPattern, searchPattern, searchPattern]
     );
-    const total = countRes[0].total;
+    const total = countRes[0]?.total || 0;
 
     const [rows] = await db.query(
       `SELECT DISTINCT a.*
        FROM anime a
        LEFT JOIN anime_alternative_titles alt ON a.anime_id = alt.anime_id
        WHERE a.title LIKE ? OR a.japanese_title LIKE ? OR a.description LIKE ? OR alt.title LIKE ?
-       ORDER BY a.popularity_rank ASC, a.site_score DESC
+       ORDER BY a.anime_id DESC
        LIMIT ? OFFSET ?`,
       [searchPattern, searchPattern, searchPattern, searchPattern, limit, offset]
     );

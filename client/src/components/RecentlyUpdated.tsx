@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { animeData, type Anime } from '../data/animeData'
+import { type Anime } from '../data/animeData'
+import { useApp } from '../context/AppContext'
 
 interface RecentlyUpdatedProps {
   onAnimeClick: (anime: Anime) => void
@@ -8,12 +9,13 @@ interface RecentlyUpdatedProps {
 const filters = ['All', 'Sub', 'Dub', 'Movie', 'ONA', 'OVA']
 
 export default function RecentlyUpdated({ onAnimeClick }: RecentlyUpdatedProps) {
+  const { animeList } = useApp()
   const [activeFilter, setActiveFilter] = useState('All')
 
-  const filtered = activeFilter === 'All' ? animeData
-    : activeFilter === 'Dub' ? animeData.filter(a => a.isDub)
-    : activeFilter === 'Sub' ? animeData.filter(a => !a.isDub)
-    : animeData.filter(a => a.type === activeFilter)
+  const filtered = activeFilter === 'All' ? animeList
+    : activeFilter === 'Dub' ? animeList.filter(a => a.isDub)
+    : activeFilter === 'Sub' ? animeList.filter(a => !a.isDub)
+    : animeList.filter(a => a.type === activeFilter)
 
   return (
     <section className="py-8">
