@@ -353,6 +353,22 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
     }
   }
 
+  // Add Next Episode
+  const handleAddNextEpisode = () => {
+    if (!selectedAnimeForEpisodes) return
+    const currentTotal = selectedAnimeForEpisodes.episodes || 12
+    const newTotal = currentTotal + 1
+    const updatedTitles = [...(selectedAnimeForEpisodes.episodeTitles || [])]
+    updatedTitles.push(`Episode ${newTotal}`)
+    updateAnime(selectedAnimeForEpisodes.id, { episodes: newTotal, episodeTitles: updatedTitles })
+    setSelectedAnimeForEpisodes(prev => prev ? { ...prev, episodes: newTotal, episodeTitles: updatedTitles } : null)
+    setSelectedEpNumber(newTotal)
+    setEpTitleInput(`Episode ${newTotal}`)
+    setEpGumletInput('')
+    setEpValidationState({ status: 'idle' })
+    showToast(`Added Episode ${newTotal} to ${selectedAnimeForEpisodes.title}! ✨`)
+  }
+
   // Save Episode Stream Links
   const handleSaveEpisodeStream = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -370,8 +386,8 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
     })
 
     // Also update episode title if modified
+    let updatedTitles = [...(selectedAnimeForEpisodes.episodeTitles || [])]
     if (epTitleInput.trim()) {
-      const updatedTitles = [...(selectedAnimeForEpisodes.episodeTitles || [])]
       while (updatedTitles.length < selectedEpNumber) {
         updatedTitles.push(`Episode ${updatedTitles.length + 1}`)
       }
@@ -379,7 +395,26 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
       updateAnime(selectedAnimeForEpisodes.id, { episodeTitles: updatedTitles })
     }
 
-    showToast(`Episode ${selectedEpNumber} Gumlet stream updated! 🎬`)
+    // Update local state in modal immediately
+    setSelectedAnimeForEpisodes(prev => {
+      if (!prev) return null
+      const currentSources = prev.streamSources || {}
+      return {
+        ...prev,
+        episodeTitles: updatedTitles,
+        streamSources: {
+          ...currentSources,
+          [selectedEpNumber]: {
+            gumletUrl: formattedUrl,
+            gumletAssetId: assetId,
+            streamStatus,
+            errorMessage: epValidationState.status === 'invalid' ? epValidationState.message : null
+          }
+        }
+      }
+    })
+
+    showToast(`Episode ${selectedEpNumber} Gumlet stream updated and verified! 🎬`)
   }
 
   // Quick Repair Action
@@ -1078,38 +1113,66 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
       {/* MODAL 2: Episode & Gumlet Stream Manager */}
       {isEpisodeModalOpen && selectedAnimeForEpisodes && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto fade-in">
-          <div className="relative w-full max-w-2xl p-6 sm:p-8 rounded-3xl my-8 max-h-[90vh] overflow-y-auto" style={{ background: '#111216', border: '1px solid #2e313d' }}>
-            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-800">
+          <div className="relative w-full max-w-3xl p-6 sm:p-8 rounded-3xl my-8 max-h-[90vh] overflow-y-auto" style={{ background: '#111216', border: '1px solid #2e313d' }}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-4 border-b border-gray-800">
               <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <span>⚡ Episode Gumlet Stream Links</span>
-                </h2>
-                <p className="text-xs text-purple-400 font-semibold mt-0.5">{selectedAnimeForEpisodes.title}</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">⚡</span>
+                  <h2 className="text-lg font-bold text-white">Individual Episode Stream Manager</h2>
+                </div>
+                <p className="text-xs text-purple-400 font-semibold mt-0.5">
+                  {selectedAnimeForEpisodes.title} ({selectedAnimeForEpisodes.episodes || 12} Episodes Total)
+                </p>
               </div>
-              <button onClick={() => setIsEpisodeModalOpen(false)} className="text-gray-400 hover:text-white">
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleAddNextEpisode}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 transition-all flex items-center gap-1 shadow-md"
+                  title="Add another episode to this anime"
+                >
+                  <span>+</span>
+                  <span>Add Episode {(selectedAnimeForEpisodes.episodes || 12) + 1}</span>
+                </button>
+                <button onClick={() => setIsEpisodeModalOpen(false)} className="text-gray-400 hover:text-white px-2 py-1">
+                  ✕
+                </button>
+              </div>
             </div>
 
-            {/* Episode Quick Selector Grid */}
+            {/* Episode Quick Selector Grid with Status Badges */}
             <div className="mb-6">
-              <span className="text-xs text-gray-400 font-medium block mb-2">Select Episode to Configure:</span>
-              <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-12 gap-1.5 max-h-32 overflow-y-auto p-1 bg-black/40 rounded-xl border border-gray-800">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-300 font-semibold">Select Episode to Configure:</span>
+                <span className="text-[10px] text-gray-400">
+                  🟢 = Gumlet Stream Configured | ⚪ = Empty
+                </span>
+              </div>
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 max-h-36 overflow-y-auto p-2 bg-black/40 rounded-2xl border border-gray-800">
                 {Array.from({ length: selectedAnimeForEpisodes.episodes || 12 }, (_, idx) => {
                   const ep = idx + 1
                   const isCur = selectedEpNumber === ep
+                  const hasLink = !!(selectedAnimeForEpisodes.streamSources?.[ep]?.gumletUrl || (ep === 1 && selectedAnimeForEpisodes.gumletUrl))
+                  const isBroken = selectedAnimeForEpisodes.streamSources?.[ep]?.streamStatus === 'broken'
+
                   return (
                     <button
                       key={ep}
                       type="button"
                       onClick={() => handleSelectEpisode(ep)}
-                      className={`h-8 rounded-lg text-xs font-bold transition-all ${
+                      className={`h-9 rounded-xl text-xs font-bold transition-all flex items-center justify-between px-2.5 relative ${
                         isCur
-                          ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/50'
+                          ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/50 scale-105 z-10'
                           : 'bg-gray-800/80 text-gray-300 hover:bg-gray-700'
                       }`}
                     >
-                      {ep}
+                      <span>Ep {ep}</span>
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          isBroken ? 'bg-red-400' : hasLink ? 'bg-emerald-400' : 'bg-gray-600'
+                        }`}
+                        title={isBroken ? 'Stream Broken' : hasLink ? 'Gumlet Stream Active' : 'No Link Configured'}
+                      />
                     </button>
                   )
                 })}
@@ -1118,18 +1181,21 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
 
             {/* Episode Edit Form */}
             <form onSubmit={handleSaveEpisodeStream} className="flex flex-col gap-4 text-xs">
-              <div className="p-4 rounded-2xl bg-black/40 border border-gray-800 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-white text-sm">Editing Episode {selectedEpNumber}</span>
+              <div className="p-5 rounded-2xl bg-black/40 border border-gray-800 flex flex-col gap-3.5">
+                <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+                  <span className="font-bold text-white text-sm flex items-center gap-2">
+                    <span>🎬</span> Configuring Episode {selectedEpNumber} of {selectedAnimeForEpisodes.title}
+                  </span>
                   <button
                     type="button"
                     onClick={() => {
                       onWatch(selectedAnimeForEpisodes)
                       setIsEpisodeModalOpen(false)
                     }}
-                    className="text-[11px] font-bold text-pink-400 hover:text-pink-300"
+                    className="text-[11px] font-bold text-pink-400 hover:text-pink-300 flex items-center gap-1"
                   >
-                    ▶ Test Play in Watch Page
+                    <span>▶</span>
+                    <span>Test on Watch Page</span>
                   </button>
                 </div>
 
@@ -1139,39 +1205,41 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
                     type="text"
                     value={epTitleInput}
                     onChange={e => setEpTitleInput(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-black/60 border border-gray-800 text-white outline-none"
+                    placeholder={`e.g. Episode ${selectedEpNumber}`}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-gray-800 text-white outline-none focus:border-purple-500"
                   />
                 </div>
 
                 <div>
                   <label className="text-gray-300 font-semibold block mb-1 flex items-center justify-between">
-                    <span>⚡ Gumlet Video Embed Link or Asset ID:</span>
+                    <span>⚡ Gumlet Share Link, Embed URL, or Asset ID for Episode {selectedEpNumber}:</span>
                     <button
                       type="button"
                       onClick={() => handleValidateGumletUrl(epGumletInput)}
-                      className="text-purple-400 hover:text-purple-300 font-bold text-[10px] underline"
+                      className="text-purple-400 hover:text-purple-300 font-bold text-[11px] underline"
                     >
-                      Verify Link Reachability
+                      Verify Reachability
                     </button>
                   </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="https://play.gumlet.io/embed/65719bc42b91866ef114bca8"
-                      value={epGumletInput}
-                      onChange={e => {
-                        setEpGumletInput(e.target.value)
-                        setEpValidationState({ status: 'idle' })
-                      }}
-                      onBlur={() => handleValidateGumletUrl(epGumletInput)}
-                      className="w-full px-3 py-2 rounded-xl bg-black/60 border border-gray-800 text-white font-mono text-[11px]"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    placeholder="https://gumlet.tv/watch/6a870965ba1e4a1341b3642f/ or https://play.gumlet.io/embed/..."
+                    value={epGumletInput}
+                    onChange={e => {
+                      setEpGumletInput(e.target.value)
+                      setEpValidationState({ status: 'idle' })
+                    }}
+                    onBlur={() => handleValidateGumletUrl(epGumletInput)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-gray-800 text-white font-mono text-[11px] outline-none focus:border-purple-500"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Supports any Gumlet link format: <code className="text-gray-400">https://gumlet.tv/watch/&lt;asset_id&gt;/</code>, <code className="text-gray-400">https://play.gumlet.io/embed/&lt;asset_id&gt;</code>, or raw Asset IDs.
+                  </p>
 
                   {/* Validation Feedback Banner */}
                   {epValidationState.status !== 'idle' && (
                     <div
-                      className={`mt-2 p-2.5 rounded-xl text-[11px] flex items-center gap-2 ${
+                      className={`mt-2.5 p-3 rounded-xl text-xs flex items-center gap-2 ${
                         epValidationState.status === 'valid'
                           ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
                           : epValidationState.status === 'invalid'
@@ -1179,34 +1247,57 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
                           : 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
                       }`}
                     >
-                      <span>
+                      <span className="text-base">
                         {epValidationState.status === 'valid' ? '✓' : epValidationState.status === 'invalid' ? '⚠️' : '⏳'}
                       </span>
-                      <span>{epValidationState.message}</span>
+                      <span className="font-medium">{epValidationState.message}</span>
                       {epValidationState.assetId && (
-                        <span className="ml-auto font-mono text-[10px] text-gray-400">
+                        <span className="ml-auto font-mono text-[10px] text-gray-400 bg-black/40 px-2 py-0.5 rounded">
                           Asset ID: {epValidationState.assetId}
                         </span>
                       )}
                     </div>
                   )}
                 </div>
+
+                {/* Live In-Modal Video Player Preview */}
+                {epGumletInput.trim() && (
+                  <div className="mt-2 p-3.5 rounded-2xl bg-black/70 border border-purple-500/30">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                        <span>📺</span> Live Player Preview (Episode {selectedEpNumber})
+                      </span>
+                      <span className="text-[10px] text-emerald-400 font-medium">
+                        Adaptive Stream Ready
+                      </span>
+                    </div>
+                    <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black border border-gray-800 shadow-xl">
+                      <iframe
+                        src={formatGumletEmbedUrl(epGumletInput, { autoplay: false, subtitles: true, preload: true })}
+                        title={`Episode ${selectedEpNumber} Preview`}
+                        className="w-full h-full border-0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                        allowFullScreen
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsEpisodeModalOpen(false)}
-                  className="px-5 py-2 rounded-xl font-semibold text-gray-400 hover:bg-white/10"
+                  className="px-5 py-2.5 rounded-xl font-semibold text-gray-400 hover:bg-white/10 transition-colors"
                 >
                   Close
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 rounded-xl font-bold text-white transition-all hover:scale-105"
+                  className="px-6 py-2.5 rounded-xl font-bold text-white transition-all hover:scale-105 shadow-lg"
                   style={{ background: 'linear-gradient(135deg, #6d3bff, #ff4db8)' }}
                 >
-                  Save Episode {selectedEpNumber} Gumlet Stream
+                  Save Episode {selectedEpNumber} Link
                 </button>
               </div>
             </form>

@@ -28,14 +28,24 @@ async function runGumletTests() {
   const id3 = extractGumletAssetId('https://video.gumlet.io/6389f/65719bc42b91866ef114bca8/main.m3u8');
   assert(id3 === '65719bc42b91866ef114bca8', 'Extract Asset ID from video.gumlet.io HLS stream URL');
 
-  // 2. Test Embed URL Formatting with options
-  const embedUrl = formatGumletEmbedUrl('65719bc42b91866ef114bca8', {
+  const id4 = extractGumletAssetId('https://gumlet.tv/watch/6a870965ba1e4a1341b3642f/');
+  assert(id4 === '6a870965ba1e4a1341b3642f', 'Extract Asset ID from gumlet.tv/watch/ URL with trailing slash');
+
+  // 2. Test Live Reachability of Live Gumlet Video Stream (Tokyo Ghoul)
+  const tokyoGhoulRes = await validateGumletUrl('https://gumlet.tv/watch/6a870965ba1e4a1341b3642f/', true);
+  assert(
+    tokyoGhoulRes.valid === true && tokyoGhoulRes.status === 'healthy' && tokyoGhoulRes.assetId === '6a870965ba1e4a1341b3642f',
+    'Live Reachability Verification of Real Gumlet Video Stream (HTTP 200)'
+  );
+
+  // 3. Test Embed URL Formatting with options
+  const embedUrl = formatGumletEmbedUrl('6a870965ba1e4a1341b3642f', {
     autoplay: true,
     subtitles: true,
     color: '6d3bff'
   });
   assert(
-    embedUrl.includes('https://play.gumlet.io/embed/65719bc42b91866ef114bca8') &&
+    embedUrl.includes('https://play.gumlet.io/embed/6a870965ba1e4a1341b3642f') &&
     embedUrl.includes('autoplay=true') &&
     embedUrl.includes('subtitles=true'),
     'Format Gumlet Embed URL with playback parameters'

@@ -37,29 +37,44 @@ export const SAMPLE_GUMLET_ASSET_ID = '65719bc42b91866ef114bca8';
  * - https://video.gumlet.io/6389f/65719bc42b91866ef114bca8/main.m3u8
  * - 65719bc42b91866ef114bca8 (raw ID)
  */
+/**
+ * Extracts a Gumlet Asset ID from various link formats:
+ * - https://gumlet.tv/watch/6a870965ba1e4a1341b3642f/
+ * - https://gumlet.tv/watch/6a870965ba1e4a1341b3642f
+ * - https://play.gumlet.io/embed/6a870965ba1e4a1341b3642f
+ * - https://video.gumlet.io/6389f/6a870965ba1e4a1341b3642f/main.m3u8
+ * - Raw 24-32 char hex/alphanumeric ID
+ */
 export function extractGumletAssetId(url: string | undefined | null): string | null {
   if (!url) return null;
-  const trimmed = url.trim();
+  let trimmed = url.trim().split('?')[0].split('#')[0];
+  trimmed = trimmed.replace(/\/+$/, '');
 
   // 1. Hex or alphanumeric ID (typically 24-32 chars)
   if (/^[a-fA-F0-9]{24,32}$/.test(trimmed)) {
     return trimmed;
   }
 
-  // 2. play.gumlet.io/embed/:asset_id
+  // 2. gumlet.tv/watch/:asset_id or gumlet.tv/embed/:asset_id
+  const tvMatch = trimmed.match(/gumlet\.tv\/(?:watch|embed)\/([a-zA-Z0-9_-]+)/i);
+  if (tvMatch && tvMatch[1]) {
+    return tvMatch[1];
+  }
+
+  // 3. play.gumlet.io/embed/:asset_id
   const embedMatch = trimmed.match(/play\.gumlet\.io\/embed\/([a-zA-Z0-9_-]+)/i);
   if (embedMatch && embedMatch[1]) {
     return embedMatch[1];
   }
 
-  // 3. video.gumlet.io/:collection_id/:asset_id/...
+  // 4. video.gumlet.io/:collection_id/:asset_id/...
   const videoMatch = trimmed.match(/video\.gumlet\.io\/[a-zA-Z0-9_-]+\/([a-zA-Z0-9_-]+)/i);
   if (videoMatch && videoMatch[1]) {
     return videoMatch[1];
   }
 
-  // 4. Generic gumlet.io link
-  const genericMatch = trimmed.match(/gumlet\.io\/(?:embed\/)?([a-zA-Z0-9_-]{12,36})/i);
+  // 5. Generic gumlet.tv or gumlet.io link
+  const genericMatch = trimmed.match(/gumlet\.(?:tv|io)\/(?:embed\/|watch\/)?([a-zA-Z0-9_-]{12,36})/i);
   if (genericMatch && genericMatch[1]) {
     return genericMatch[1];
   }
@@ -116,15 +131,17 @@ export function validateGumletUrlClient(url: string | undefined | null): {
   const assetId = extractGumletAssetId(trimmed);
 
   const isGumletPattern =
+    trimmed.includes('gumlet.tv') ||
     trimmed.includes('gumlet.io') ||
     /^[a-fA-F0-9]{24,32}$/.test(trimmed) ||
-    trimmed.startsWith('https://play.gumlet.io');
+    trimmed.startsWith('https://play.gumlet.io') ||
+    trimmed.startsWith('https://gumlet.tv');
 
   if (!isGumletPattern && !assetId) {
     return {
       isValid: false,
       assetId: null,
-      error: 'Invalid Gumlet URL format. Expected a play.gumlet.io link or asset ID.',
+      error: 'Invalid Gumlet URL format. Expected a gumlet.tv/watch link or valid Gumlet Asset ID.',
     };
   }
 

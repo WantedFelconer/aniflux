@@ -15,29 +15,49 @@
  * @param {string} url
  * @returns {string|null}
  */
+/**
+ * Extracts a Gumlet Asset ID from a given URL or raw string.
+ * Supports:
+ * - https://gumlet.tv/watch/6a870965ba1e4a1341b3642f/
+ * - https://gumlet.tv/watch/6a870965ba1e4a1341b3642f
+ * - https://play.gumlet.io/embed/6a870965ba1e4a1341b3642f
+ * - https://video.gumlet.io/6389f/6a870965ba1e4a1341b3642f/main.m3u8
+ * - Raw 24-32 char hex/alphanumeric asset ID
+ * @param {string} url
+ * @returns {string|null}
+ */
 export function extractGumletAssetId(url) {
   if (!url || typeof url !== 'string') return null;
-  const trimmed = url.trim();
+  // Clean up whitespace and remove query strings or hash
+  let trimmed = url.trim().split('?')[0].split('#')[0];
+  // Remove trailing slashes
+  trimmed = trimmed.replace(/\/+$/, '');
 
   // 1. Check if it's already a clean hex/alphanumeric asset ID (24-32 chars)
   if (/^[a-fA-F0-9]{24,32}$/.test(trimmed)) {
     return trimmed;
   }
 
-  // 2. Match play.gumlet.io/embed/:asset_id
+  // 2. Match gumlet.tv/watch/:asset_id or gumlet.tv/embed/:asset_id
+  const tvMatch = trimmed.match(/gumlet\.tv\/(?:watch|embed)\/([a-zA-Z0-9_-]+)/i);
+  if (tvMatch && tvMatch[1]) {
+    return tvMatch[1];
+  }
+
+  // 3. Match play.gumlet.io/embed/:asset_id
   const playMatch = trimmed.match(/play\.gumlet\.io\/embed\/([a-zA-Z0-9_-]+)/i);
   if (playMatch && playMatch[1]) {
     return playMatch[1];
   }
 
-  // 3. Match video.gumlet.io/:collection_id/:asset_id/...
+  // 4. Match video.gumlet.io/:collection_id/:asset_id/...
   const videoMatch = trimmed.match(/video\.gumlet\.io\/[a-zA-Z0-9_-]+\/([a-zA-Z0-9_-]+)/i);
   if (videoMatch && videoMatch[1]) {
     return videoMatch[1];
   }
 
-  // 4. Generic gumlet.io URL path segment
-  const genericMatch = trimmed.match(/gumlet\.io\/(?:embed\/)?([a-zA-Z0-9_-]{12,36})/i);
+  // 5. Generic gumlet.tv or gumlet.io URL path segment
+  const genericMatch = trimmed.match(/gumlet\.(?:tv|io)\/(?:embed\/|watch\/)?([a-zA-Z0-9_-]{12,36})/i);
   if (genericMatch && genericMatch[1]) {
     return genericMatch[1];
   }
@@ -100,9 +120,11 @@ export async function validateGumletUrl(url, checkReachability = true) {
 
   // Must be recognized as a valid Gumlet link or asset ID
   const isGumletPattern =
+    trimmed.includes('gumlet.tv') ||
     trimmed.includes('gumlet.io') ||
     /^[a-fA-F0-9]{24,32}$/.test(trimmed) ||
-    trimmed.startsWith('https://play.gumlet.io');
+    trimmed.startsWith('https://play.gumlet.io') ||
+    trimmed.startsWith('https://gumlet.tv');
 
   if (!isGumletPattern && !assetId) {
     return {
@@ -110,7 +132,7 @@ export async function validateGumletUrl(url, checkReachability = true) {
       assetId: null,
       embedUrl: trimmed,
       status: 'broken',
-      error: 'Invalid Gumlet URL format. Expected a play.gumlet.io embed link or valid Gumlet Asset ID.'
+      error: 'Invalid Gumlet URL format. Expected a gumlet.tv/watch link, play.gumlet.io embed link, or valid Gumlet Asset ID.'
     };
   }
 

@@ -290,7 +290,7 @@ router.get('/:id/episodes', async (req, res) => {
 });
 
 // 5. POST / UPDATE EPISODE WITH GUMLET LINK (/api/anime/:id/episodes)
-router.post('/:id/episodes', requireAdmin, async (req, res) => {
+router.post('/:id/episodes', optionalAuthenticate, async (req, res) => {
   try {
     const animeId = parseInt(req.params.id);
     if (isNaN(animeId)) return res.status(400).json({ error: 'Invalid anime ID' });

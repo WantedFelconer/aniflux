@@ -21,40 +21,22 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
   const [activeTab, setActiveTab] = useState<'Episodes' | 'Comments' | 'Details' | 'Gumlet Info'>('Episodes')
   const [comment, setComment] = useState('')
 
-  // Custom Stream Links State
-  const [customGumletUrl, setCustomGumletUrl] = useState('')
-  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false)
-  const [inputGumlet, setInputGumlet] = useState('')
-
   const totalEps = anime.episodes || 12
 
-  // Sync custom stream link if defined in anime
-  useEffect(() => {
-    if (anime.gumletUrl) setCustomGumletUrl(anime.gumletUrl)
-  }, [anime])
-
-  // Resolve current episode stream source
+  // Resolve current episode stream source from catalog metadata & streamSources
   const currentStream: GumletStreamSource = useMemo(() => {
     return resolveGumletEpisodeStream(
       anime.id,
       currentEp,
-      customGumletUrl || anime.gumletUrl,
+      anime.gumletUrl,
       anime.streamSources
     )
-  }, [anime, currentEp, customGumletUrl])
+  }, [anime, currentEp])
 
   // Log to watch history
   useEffect(() => {
     addHistory(anime, currentEp)
   }, [anime.id, currentEp])
-
-  const handleApplyCustomLink = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (inputGumlet.trim()) {
-      setCustomGumletUrl(inputGumlet.trim())
-    }
-    setIsCustomModalOpen(false)
-  }
 
   const isBookmarked = bookmarks.has(anime.id)
   const episodeTitle = anime.episodeTitles?.[currentEp - 1] || `Episode ${currentEp}`
@@ -105,21 +87,6 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
             </svg>
             <span className="hidden sm:inline">{isBookmarked ? 'Bookmarked' : 'Bookmark'}</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setInputGumlet(customGumletUrl || anime.gumletUrl || '')
-              setIsCustomModalOpen(true)
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:bg-white/10 text-white"
-            style={{ background: '#1b1d23', border: '1px solid #23252b' }}
-            title="Configure Gumlet Stream URL"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c084fc" strokeWidth="2">
-              <polygon points="5 3 19 12 5 21 5 3" />
-            </svg>
-            <span className="hidden sm:inline">Gumlet Link</span>
           </button>
         </div>
       </div>
@@ -346,13 +313,14 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
                   </span>
                 </div>
 
-                <button
-                  onClick={() => setIsCustomModalOpen(true)}
-                  className="self-start px-4 py-2 rounded-xl text-xs font-bold text-white transition-transform hover:scale-105"
-                  style={{ background: 'linear-gradient(135deg, #6d3bff, #ff4db8)' }}
-                >
-                  Configure Episode Stream Link
-                </button>
+                <div className="p-3.5 rounded-xl border" style={{ background: '#1b1d23', borderColor: '#2e313d' }}>
+                  <div className="flex items-center gap-2 text-xs font-bold text-purple-400 mb-1">
+                    <span>📡</span> Gumlet Player Status
+                  </div>
+                  <span className="text-[11px] font-mono text-gray-300 break-all block bg-black/40 p-2.5 rounded-lg">
+                    {currentStream.streamStatus === 'healthy' ? 'Verified High-Definition Stream' : 'Stream Ready'}
+                  </span>
+                </div>
               </div>
             )}
           </div>
@@ -366,57 +334,6 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
           </div>
         </div>
       </div>
-
-      {/* Modal: Custom Gumlet Link Configurator */}
-      {isCustomModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm fade-in">
-          <div className="relative w-full max-w-lg p-6 rounded-3xl" style={{ background: '#111216', border: '1px solid #2e313d' }}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <span>⚡</span> Set Gumlet Video Stream Link
-              </h2>
-              <button onClick={() => setIsCustomModalOpen(false)} className="text-gray-400 hover:text-white">
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleApplyCustomLink} className="flex flex-col gap-4">
-              <div>
-                <label className="text-xs font-semibold text-gray-300 block mb-1.5">
-                  Gumlet Embed Link or Asset ID:
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. https://play.gumlet.io/embed/65719bc42b91866ef114bca8"
-                  value={inputGumlet}
-                  onChange={e => setInputGumlet(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl text-xs outline-none bg-black/50 border border-gray-700 text-white font-mono"
-                />
-                <p className="text-[10px] text-gray-400 mt-1">
-                  Accepts standard play.gumlet.io embed links or raw 24-character Gumlet asset IDs.
-                </p>
-              </div>
-
-              <div className="flex gap-2 justify-end mt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsCustomModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-300 hover:bg-white/10"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl text-xs font-bold text-white transition-transform hover:scale-105"
-                  style={{ background: 'linear-gradient(135deg, #6d3bff, #ff4db8)' }}
-                >
-                  Apply & Stream
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
