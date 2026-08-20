@@ -116,7 +116,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ emailOrUsername, password: pass, rememberMe })
       })
 
-      const data = await res.json()
+      let data: any = {}
+      try {
+        data = await res.json()
+      } catch {
+        data = { error: res.ok ? 'Unexpected server response' : 'Server is temporarily unavailable. Please try again.' }
+      }
 
       if (!res.ok) {
         setAuthError(data.error || 'Invalid credentials')
@@ -159,7 +164,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ username, email, password: pass })
       })
 
-      const data = await res.json()
+      let data: any = {}
+      try {
+        data = await res.json()
+      } catch {
+        data = { error: res.ok ? 'Unexpected server response' : 'Server is temporarily unavailable. Please try again.' }
+      }
 
       if (!res.ok) {
         setAuthError(data.error || 'Registration failed')

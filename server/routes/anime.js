@@ -192,6 +192,10 @@ router.get('/', async (req, res) => {
     });
   } catch (err) {
     console.error('Fetch anime catalog error:', err);
+    return res.status(500).json({ error: 'Failed to fetch anime catalog' });
+  }
+});
+
 // 2. SEARCH ANIME (/api/anime/search)
 router.get('/search', async (req, res) => {
   try {
