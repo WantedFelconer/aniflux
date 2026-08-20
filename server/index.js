@@ -8,6 +8,7 @@ import authRoutes from './routes/auth.js';
 import animeRoutes from './routes/anime.js';
 import meRoutes from './routes/me.js';
 import adminRoutes from './routes/admin.js';
+import commentsRoutes from './routes/comments.js';
 import streamSupervisor from './services/supervisor.js';
 
 dotenv.config();
@@ -65,6 +66,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/anime', animeRoutes);
 app.use('/api/me', meRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/anime/:id/episodes/:epNumber/comments', commentsRoutes);
+app.use('/api', commentsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

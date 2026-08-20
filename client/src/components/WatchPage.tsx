@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { animeData, type Anime } from '../data/animeData'
 import { useApp } from '../context/AppContext'
 import GumletPlayer from './GumletPlayer'
+import EpisodeComments from './EpisodeComments'
 import {
   extractGumletAssetId,
   formatGumletEmbedUrl,
@@ -236,77 +237,13 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
               </div>
             )}
 
-            {/* TAB 2: Comments */}
+            {/* TAB 2: Comments (Episode-wise 9anime style discussion) */}
             {activeTab === 'Comments' && (
-              <div className="fade-in flex flex-col gap-4">
-                <div className="flex gap-3">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold text-white"
-                    style={{ background: 'linear-gradient(135deg, #6d3bff, #ff4db8)' }}
-                  >
-                    U
-                  </div>
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      placeholder="Add to the discussion..."
-                      value={comment}
-                      onChange={e => setComment(e.target.value)}
-                      className="w-full bg-transparent outline-none text-sm border-b pb-2 text-white"
-                      style={{ borderColor: '#23252b' }}
-                    />
-                    {comment && (
-                      <div className="flex gap-2 mt-2">
-                        <button
-                          className="px-3 py-1 rounded-lg text-xs font-semibold text-white"
-                          style={{ background: '#6d3bff' }}
-                          onClick={() => setComment('')}
-                        >
-                          Post
-                        </button>
-                        <button
-                          className="px-3 py-1 rounded-lg text-xs font-medium text-gray-400"
-                          style={{ background: '#1b1d23', border: '1px solid #23252b' }}
-                          onClick={() => setComment('')}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {comments.map((c, i) => (
-                  <div
-                    key={i}
-                    className="flex gap-3 p-3 rounded-xl"
-                    style={{ background: '#111216', border: '1px solid #1f2128' }}
-                  >
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold text-white"
-                      style={{ background: `hsl(${i * 60 + 200}, 70%, 40%)` }}
-                    >
-                      {c.user[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-white">{c.user}</span>
-                        <span className="text-xs" style={{ color: '#a0a0a0' }}>{c.time}</span>
-                      </div>
-                      <p className="text-sm mt-1" style={{ color: '#c0c0c0' }}>{c.text}</p>
-                      <div className="flex items-center gap-3 mt-2">
-                        <button className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors">
-                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                            <path d="M2 5h3V2l4 5-4 5V8H2V5z" />
-                          </svg>
-                          <span>{c.likes}</span>
-                        </button>
-                        <button className="text-xs text-gray-400 hover:text-white transition-colors">Reply</button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <EpisodeComments
+                animeId={anime.id}
+                episodeNumber={currentEp}
+                animeTitle={anime.title}
+              />
             )}
 
             {/* TAB 3: Details */}
