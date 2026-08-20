@@ -126,6 +126,28 @@ async function seed() {
   await conn.query(schemaSql);
   console.log('Schema applied successfully.');
 
+  // Run automatic schema column migrations for existing tables
+  try {
+    const episodeCols = [
+      { name: 'gumlet_url', sql: 'ALTER TABLE episodes ADD COLUMN gumlet_url VARCHAR(500) NULL' },
+      { name: 'gumlet_asset_id', sql: 'ALTER TABLE episodes ADD COLUMN gumlet_asset_id VARCHAR(100) NULL' },
+      { name: 'stream_status', sql: "ALTER TABLE episodes ADD COLUMN stream_status ENUM('healthy', 'broken', 'unverified', 'pending') NOT NULL DEFAULT 'unverified'" },
+      { name: 'last_checked_at', sql: 'ALTER TABLE episodes ADD COLUMN last_checked_at DATETIME NULL' },
+      { name: 'error_message', sql: 'ALTER TABLE episodes ADD COLUMN error_message TEXT NULL' },
+      { name: 'subtitle_tracks', sql: 'ALTER TABLE episodes ADD COLUMN subtitle_tracks JSON NULL' }
+    ];
+
+    for (const col of episodeCols) {
+      const [existingCols] = await conn.query('SHOW COLUMNS FROM episodes LIKE ?', [col.name]);
+      if (existingCols.length === 0) {
+        await conn.query(col.sql);
+        console.log(`Migrated database: added ${col.name} column to episodes table.`);
+      }
+    }
+  } catch (migrationErr) {
+    console.warn('Column migration notice:', migrationErr.message);
+  }
+
   // Seed Default Admin User
   const adminPasswordHash = '$2b$10$LXaF0ZEOmg1Z7F/rjgDKP.S6rkxOj8HF0bgG4C1eEKhdUmxnQjemm'; // "admin123"
   await conn.query(

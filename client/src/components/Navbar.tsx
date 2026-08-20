@@ -80,20 +80,18 @@ export default function Navbar({ onSearchOpen, onHome, currentView, onNavigate }
             ))}
 
             {/* Admin Panel Button (Desktop) */}
-            {isAdmin && (
-              <button
-                onClick={() => onNavigate('admin')}
-                className="ml-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md hover:scale-105"
-                style={{
-                  background: currentView === 'admin' ? 'linear-gradient(135deg, #6d3bff, #ff4db8)' : 'rgba(109,59,255,0.18)',
-                  color: currentView === 'admin' ? '#fff' : '#ff4db8',
-                  border: '1px solid rgba(255,77,184,0.4)',
-                }}
-              >
-                <span>🛡️</span>
-                <span>Admin Panel</span>
-              </button>
-            )}
+            <button
+              onClick={() => onNavigate('admin')}
+              className="ml-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md hover:scale-105"
+              style={{
+                background: currentView === 'admin' ? 'linear-gradient(135deg, #6d3bff, #ff4db8)' : 'rgba(109,59,255,0.18)',
+                color: currentView === 'admin' ? '#fff' : '#c084fc',
+                border: '1px solid rgba(192,132,252,0.4)',
+              }}
+            >
+              <span>🛡️</span>
+              <span>Admin Panel</span>
+            </button>
           </div>
 
           {/* Right */}
@@ -210,15 +208,13 @@ export default function Navbar({ onSearchOpen, onHome, currentView, onNavigate }
               </button>
             ))}
 
-            {isAdmin && (
-              <button
-                onClick={() => { onNavigate('admin'); setMobileMenuOpen(false) }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-left transition-all text-pink-400 mt-1"
-                style={{ background: currentView === 'admin' ? 'linear-gradient(135deg, #6d3bff, #ff4db8)' : 'rgba(255,77,184,0.15)', color: currentView === 'admin' ? '#fff' : '#ff4db8' }}
-              >
-                <span>🛡️</span> Admin Panel
-              </button>
-            )}
+            <button
+              onClick={() => { onNavigate('admin'); setMobileMenuOpen(false) }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-left transition-all text-purple-300 mt-1"
+              style={{ background: currentView === 'admin' ? 'linear-gradient(135deg, #6d3bff, #ff4db8)' : 'rgba(109,59,255,0.15)', color: currentView === 'admin' ? '#fff' : '#c084fc' }}
+            >
+              <span>🛡️</span> Admin Panel
+            </button>
           </div>
         )}
       </nav>

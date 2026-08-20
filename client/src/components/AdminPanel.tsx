@@ -47,7 +47,7 @@ const SEASONS = ['Winter', 'Spring', 'Summer', 'Fall'] as const
 const STATUS_OPTIONS = ['Airing', 'Completed', 'Upcoming'] as const
 
 export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: AdminPanelProps) {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, login } = useAuth()
   const { animeList, addAnime, updateAnime, deleteAnime, updateEpisodeStreams } = useApp()
 
   // Navigation / Tabs
@@ -416,22 +416,61 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
     setFormGenres(prev => (prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]))
   }
 
+  const [adminPass, setAdminPass] = useState('admin123')
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+
+  const handleQuickAdminLogin = async () => {
+    setIsLoggingIn(true)
+    try {
+      const success = await login('admin', adminPass, true)
+      if (success) {
+        showToast('Authenticated as Administrator! 🛡️')
+      } else {
+        showToast('Login failed. Please check password.')
+      }
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`)
+    } finally {
+      setIsLoggingIn(false)
+    }
+  }
+
   // Access check guard
   if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4" style={{ paddingTop: 80, background: '#09090b' }}>
-        <div className="p-8 rounded-3xl text-center max-w-md w-full" style={{ background: '#111216', border: '1px solid #23252b' }}>
+        <div className="p-8 rounded-3xl text-center max-w-md w-full shadow-2xl" style={{ background: '#111216', border: '1px solid #23252b' }}>
           <span className="text-5xl block mb-4">🛡️</span>
           <h2 className="text-xl font-bold mb-2 text-white">Administrator Access Required</h2>
-          <p className="text-sm text-gray-400 mb-6">
-            You must be signed in with the system administrator account (<code className="text-purple-400">admin</code>) to view the Admin Console.
+          <p className="text-xs text-gray-400 mb-6 leading-relaxed">
+            You need to be authenticated as the system administrator (<code className="text-purple-400 font-mono">admin</code>) to manage anime catalogs and Gumlet video streaming links.
           </p>
+
+          <div className="p-4 rounded-2xl bg-black/40 border border-gray-800 mb-6 text-left">
+            <label className="text-[11px] text-gray-400 font-semibold block mb-1.5">Admin Password:</label>
+            <input
+              type="password"
+              value={adminPass}
+              onChange={e => setAdminPass(e.target.value)}
+              placeholder="Enter admin password (default: admin123)"
+              className="w-full px-3.5 py-2 rounded-xl text-xs bg-black/60 border border-gray-700 text-white outline-none focus:border-purple-500 mb-3"
+            />
+            <button
+              onClick={handleQuickAdminLogin}
+              disabled={isLoggingIn}
+              className="w-full py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(135deg, #6d3bff, #ff4db8)' }}
+            >
+              <span>⚡</span>
+              <span>{isLoggingIn ? 'Authenticating...' : 'Sign In as Admin (admin123)'}</span>
+            </button>
+          </div>
+
           <button
             onClick={onNavigateHome}
-            className="px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-transform hover:scale-105"
-            style={{ background: 'linear-gradient(135deg, #6d3bff, #ff4db8)' }}
+            className="px-5 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white transition-colors"
           >
-            Return to Home
+            ← Return to Home Catalog
           </button>
         </div>
       </div>
