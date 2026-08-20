@@ -50,12 +50,30 @@ export default function App() {
       if (route === 'watch' && param) {
         const id = parseInt(param)
         const found = animeList.find(a => a.id === id) || animeData.find(a => a.id === id)
-        if (found) setWatchAnime(found)
+        if (found) {
+          setWatchAnime(found)
+        } else {
+          fetch(`/api/anime/${id}`, { credentials: 'include' })
+            .then(res => res.json())
+            .then(data => {
+              if (data?.anime) setWatchAnime(data.anime)
+            })
+            .catch(() => {})
+        }
         setCurrentView('watch')
       } else if (route === 'anime' && param) {
         const id = parseInt(param)
         const found = animeList.find(a => a.id === id) || animeData.find(a => a.id === id)
-        if (found) setProfileAnime(found)
+        if (found) {
+          setProfileAnime(found)
+        } else {
+          fetch(`/api/anime/${id}`, { credentials: 'include' })
+            .then(res => res.json())
+            .then(data => {
+              if (data?.anime) setProfileAnime(data.anime)
+            })
+            .catch(() => {})
+        }
         setCurrentView('anime-profile')
       } else if (
         ['browse', 'chat', 'my-list', 'profile', 'trending', 'schedule', 'login', 'register', 'forgot-password', 'admin'].includes(route)

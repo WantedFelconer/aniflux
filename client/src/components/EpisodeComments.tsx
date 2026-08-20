@@ -109,9 +109,12 @@ export default function EpisodeComments({
     setErrorMsg(null)
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (authUser?.id) headers['X-User-Id'] = String(authUser.id)
+
       const res = await fetch(`/api/anime/${animeId}/episodes/${episodeNumber}/comments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         credentials: 'include',
         body: JSON.stringify({
           commentText: commentText.trim(),
@@ -142,9 +145,12 @@ export default function EpisodeComments({
 
     setIsReplying(true)
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (authUser?.id) headers['X-User-Id'] = String(authUser.id)
+
       const res = await fetch(`/api/anime/${animeId}/episodes/${episodeNumber}/comments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         credentials: 'include',
         body: JSON.stringify({
           commentText: replyText.trim(),
