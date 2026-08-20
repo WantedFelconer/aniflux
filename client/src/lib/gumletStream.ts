@@ -152,17 +152,20 @@ export function validateGumletUrlClient(url: string | undefined | null): {
 }
 
 /**
- * Resolves episode Gumlet stream source with fallback and subtitles.
+ * Resolves episode Gumlet stream source with per-episode priority and fallback.
  */
 export function resolveGumletEpisodeStream(
   animeId: number,
   episodeNumber: number,
-  customUrl?: string,
+  defaultAnimeUrl?: string,
   streamSourcesMap?: Record<number, any>
 ): GumletStreamSource {
   const epData = streamSourcesMap?.[episodeNumber];
-  const urlToUse = customUrl || epData?.gumletUrl || (animeId <= 3 ? SAMPLE_GUMLET_EMBED : '');
-  const assetId = extractGumletAssetId(urlToUse) || SAMPLE_GUMLET_ASSET_ID;
+  // 1. Specific Episode Gumlet URL takes highest priority
+  const epUrl = epData?.gumletUrl;
+  // 2. Default whole-anime fallback if no per-episode URL was set
+  const urlToUse = epUrl || defaultAnimeUrl || (animeId <= 3 ? SAMPLE_GUMLET_EMBED : '');
+  const assetId = extractGumletAssetId(urlToUse) || epData?.gumletAssetId || (urlToUse ? extractGumletAssetId(urlToUse) : null) || SAMPLE_GUMLET_ASSET_ID;
   const status = epData?.streamStatus || (urlToUse ? 'healthy' : 'unverified');
 
   return {

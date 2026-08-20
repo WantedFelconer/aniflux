@@ -22,16 +22,52 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
   const [comment, setComment] = useState('')
 
   const totalEps = anime.episodes || 12
+  const [liveStreamSources, setLiveStreamSources] = useState<Record<number, any>>(anime.streamSources || {})
 
-  // Resolve current episode stream source from catalog metadata & streamSources
+  // Fetch live episode stream sources from backend database
+  useEffect(() => {
+    setLiveStreamSources(anime.streamSources || {})
+    let isMounted = true
+
+    async function loadEpisodes() {
+      try {
+        const res = await fetch(`/api/anime/${anime.id}/episodes`, { credentials: 'include' })
+        if (res.ok) {
+          const json = await res.json()
+          if (isMounted && Array.isArray(json.episodes)) {
+            const map: Record<number, any> = {}
+            for (const ep of json.episodes) {
+              if (ep.gumletUrl || ep.assetId) {
+                map[ep.episodeNumber] = {
+                  gumletUrl: ep.gumletUrl,
+                  gumletAssetId: ep.assetId,
+                  streamStatus: ep.streamStatus,
+                  subtitleTracks: ep.subtitleTracks,
+                  errorMessage: ep.errorMessage
+                }
+              }
+            }
+            setLiveStreamSources(prev => ({ ...prev, ...map }))
+          }
+        }
+      } catch {
+        // Fallback to static/context sources
+      }
+    }
+
+    loadEpisodes()
+    return () => { isMounted = false }
+  }, [anime.id, anime.streamSources])
+
+  // Resolve current episode stream source with per-episode link priority
   const currentStream: GumletStreamSource = useMemo(() => {
     return resolveGumletEpisodeStream(
       anime.id,
       currentEp,
       anime.gumletUrl,
-      anime.streamSources
+      liveStreamSources
     )
-  }, [anime, currentEp])
+  }, [anime.id, anime.gumletUrl, currentEp, liveStreamSources])
 
   // Log to watch history
   useEffect(() => {

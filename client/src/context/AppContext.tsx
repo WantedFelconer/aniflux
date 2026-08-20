@@ -358,11 +358,70 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const markAllRead = useCallback(() => setNotifications(prev => prev.map(n => ({ ...n, read: true }))), [])
 
+  // Fetch initial anime catalog from backend database
+  const fetchCatalog = useCallback(async () => {
+    try {
+      const res = await fetch('/api/anime?limit=100', { credentials: 'include' })
+      if (res.ok) {
+        const json = await res.json()
+        if (Array.isArray(json.data) && json.data.length > 0) {
+          setAnimeList(json.data)
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch backend anime catalog:', err)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchCatalog()
+  }, [fetchCatalog])
+
   // Admin: Add Anime
   const addAnime = useCallback(async (newAnimeData: Partial<Anime>): Promise<boolean> => {
-    const newId = animeList.length > 0 ? Math.max(...animeList.map(a => a.id)) + 1 : 1
+    try {
+      const res = await fetch('/api/admin/anime', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          title: newAnimeData.title,
+          japaneseTitle: newAnimeData.titleJp,
+          description: newAnimeData.synopsis,
+          posterUrl: newAnimeData.poster,
+          bannerUrl: newAnimeData.banner,
+          type: newAnimeData.type,
+          status: newAnimeData.status,
+          episodeCount: newAnimeData.episodes,
+          durationMinutes: newAnimeData.duration ? parseInt(newAnimeData.duration) : 24,
+          season: newAnimeData.season,
+          seasonYear: newAnimeData.year,
+          siteScore: newAnimeData.rating,
+          malScore: newAnimeData.malScore,
+          ageRating: newAnimeData.contentRating,
+          studio: newAnimeData.studio,
+          genres: newAnimeData.genres,
+          tags: newAnimeData.tags,
+          gumletUrl: newAnimeData.gumletUrl,
+        }),
+      })
+
+      if (res.ok) {
+        const json = await res.json()
+        if (json.anime) {
+          setAnimeList(prev => [json.anime, ...prev.filter(a => a.id !== json.anime.id)])
+        }
+        fetchCatalog()
+        return true
+      }
+    } catch (e) {
+      console.error('addAnime backend error:', e)
+    }
+
+    // Fallback optimistic creation
+    const nextId = Date.now()
     const completeAnime: Anime = {
-      id: newId,
+      id: nextId,
       title: newAnimeData.title || 'Untitled Anime',
       titleJp: newAnimeData.titleJp || '',
       synopsis: newAnimeData.synopsis || '',
@@ -370,7 +429,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       tags: newAnimeData.tags || ['Adventure'],
       rating: newAnimeData.rating || 8.5,
       malScore: newAnimeData.malScore || 8.5,
-      popularity: newAnimeData.popularity || animeList.length + 1,
+      popularity: animeList.length + 1,
       membersK: newAnimeData.membersK || 100,
       studio: newAnimeData.studio || 'Aniflux Studio',
       producer: newAnimeData.producer || 'Aniplex',
@@ -396,38 +455,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     setAnimeList(prev => [completeAnime, ...prev])
-
-    try {
-      await fetch('/api/admin/anime', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          title: completeAnime.title,
-          japaneseTitle: completeAnime.titleJp,
-          description: completeAnime.synopsis,
-          posterUrl: completeAnime.poster,
-          bannerUrl: completeAnime.banner,
-          type: completeAnime.type,
-          status: completeAnime.status,
-          episodeCount: completeAnime.episodes,
-          durationMinutes: parseInt(completeAnime.duration) || 24,
-          season: completeAnime.season,
-          seasonYear: completeAnime.year,
-          siteScore: completeAnime.rating,
-          malScore: completeAnime.malScore,
-          ageRating: completeAnime.contentRating,
-          studio: completeAnime.studio,
-          genres: completeAnime.genres,
-          tags: completeAnime.tags,
-          gumletUrl: completeAnime.gumletUrl,
-        }),
-      })
-      return true
-    } catch {
-      return true
-    }
-  }, [animeList])
+    return true
+  }, [animeList, fetchCatalog])
 
   // Admin: Update Anime
   const updateAnime = useCallback(async (animeId: number, patch: Partial<Anime>): Promise<boolean> => {

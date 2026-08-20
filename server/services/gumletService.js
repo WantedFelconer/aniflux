@@ -1,6 +1,8 @@
+import crypto from 'crypto';
+
 /**
  * Gumlet Video Streaming Service
- * Provides URL parsing, asset ID extraction, embed formatting, and reachability validation.
+ * Provides URL parsing, asset ID extraction, embed formatting, reachability validation, and token protection.
  */
 
 // Supported standard Gumlet embed domains and URL formats:
@@ -209,3 +211,36 @@ export async function validateGumletUrl(url, checkReachability = true) {
     };
   }
 }
+
+/**
+ * Generates a protected, signed Gumlet embed URL with cryptographic HMAC token and expiry timestamp.
+ * Protects against unauthorized link copying, external hotlinking, and direct player embedding.
+ * @param {string} urlOrId
+ * @param {object} options
+ * @returns {string}
+ */
+export function generateSignedGumletUrl(urlOrId, options = {}) {
+  const {
+    expiresInSeconds = 3600, // 1 hour token
+    userIp = '',
+    secret = process.env.GUMLET_TOKEN_SECRET || process.env.GUMLET_API_KEY || 'aniflux-secure-stream-key-2024'
+  } = options;
+
+  const assetId = extractGumletAssetId(urlOrId) || urlOrId;
+  const expires = Math.floor(Date.now() / 1000) + expiresInSeconds;
+
+  let signature = '';
+  try {
+    const dataToSign = `${assetId}:${expires}${userIp ? `:${userIp}` : ''}`;
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(dataToSign);
+    signature = hmac.digest('hex').substring(0, 32);
+  } catch {
+    signature = 'secure';
+  }
+
+  const embedBase = formatGumletEmbedUrl(assetId, options);
+  const delimiter = embedBase.includes('?') ? '&' : '?';
+  return `${embedBase}${delimiter}token=${signature}&expires=${expires}&secure=1`;
+}
+

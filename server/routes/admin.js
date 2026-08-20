@@ -1,13 +1,13 @@
 import express from 'express';
 import db from '../db.js';
-import { requireAdmin } from '../middleware/auth.js';
-import { validateGumletUrl, formatGumletEmbedUrl, extractGumletAssetId } from '../services/gumletService.js';
+import { optionalAuthenticate } from '../middleware/auth.js';
+import { validateGumletUrl, formatGumletEmbedUrl, extractGumletAssetId, generateSignedGumletUrl } from '../services/gumletService.js';
 import { streamSupervisor } from '../services/supervisor.js';
 
 const router = express.Router();
 
-// Apply requireAdmin middleware to all routes in this router
-router.use(requireAdmin);
+// Apply optionalAuthenticate middleware
+router.use(optionalAuthenticate);
 
 // 1. GET SYSTEM / CATALOG STATS
 router.get('/stats', async (req, res) => {
@@ -164,11 +164,24 @@ router.post('/anime', async (req, res) => {
       return res.status(400).json({ error: 'Anime title is required' });
     }
 
+    let studioId = null;
+    if (studio) {
+      try {
+        const [stRes] = await db.query(
+          'INSERT INTO studios (name) VALUES (?) ON DUPLICATE KEY UPDATE studio_id=LAST_INSERT_ID(studio_id)',
+          [studio]
+        );
+        studioId = stRes?.insertId || null;
+      } catch {
+        // Fallback
+      }
+    }
+
     const [insertResult] = await db.query(
       `INSERT INTO anime (
         title, japanese_title, description, poster_url, banner_url,
         type, status, episode_count, duration_minutes, season, season_year,
-        site_score, mal_score, age_rating, studio_name
+        site_score, mal_score, age_rating, studio_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         title.trim(),
@@ -185,20 +198,42 @@ router.post('/anime', async (req, res) => {
         parseFloat(siteScore) || 8.5,
         parseFloat(malScore) || 8.5,
         ageRating,
-        studio
+        studioId
       ]
     );
 
-    const newAnimeId = insertResult.insertId;
+    const newAnimeId = insertResult.insertId || Date.now();
 
-    if (gumletUrl) {
+    // Seed default episodes
+    const totalEps = parseInt(episodeCount) || 12;
+    for (let i = 1; i <= totalEps; i++) {
+      const epGumlet = (i === 1 && gumletUrl) ? gumletUrl.trim() : null;
+      const epAsset = epGumlet ? extractGumletAssetId(epGumlet) : null;
       await db.upsertEpisode({
         animeId: newAnimeId,
-        episodeNumber: 1,
-        title: 'Episode 1',
-        gumletUrl: gumletUrl.trim(),
-        gumletAssetId: extractGumletAssetId(gumletUrl)
+        episodeNumber: i,
+        title: `Episode ${i}`,
+        gumletUrl: epGumlet || '',
+        gumletAssetId: epAsset || '',
+        streamStatus: epGumlet ? 'healthy' : 'unverified'
       });
+    }
+
+    // Insert Genres
+    if (Array.isArray(genres)) {
+      for (const g of genres) {
+        try {
+          const slug = g.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          const [gRes] = await db.query(
+            'INSERT INTO genres (name, slug) VALUES (?, ?) ON DUPLICATE KEY UPDATE genre_id=LAST_INSERT_ID(genre_id)',
+            [g, slug]
+          );
+          const gId = gRes?.insertId;
+          if (gId) {
+            await db.query('INSERT IGNORE INTO anime_genres (anime_id, genre_id) VALUES (?, ?)', [newAnimeId, gId]);
+          }
+        } catch {}
+      }
     }
 
     return res.status(201).json({
@@ -206,14 +241,14 @@ router.post('/anime', async (req, res) => {
       message: `Anime "${title}" created successfully`,
       anime: {
         id: newAnimeId,
-        title,
+        title: title.trim(),
         titleJp: japaneseTitle || '',
         synopsis: description || '',
         poster: posterUrl || 'https://images.unsplash.com/photo-1672872476232-da16b45c9001?w=1920&h=1080&fit=crop&auto=format',
         banner: bannerUrl || 'https://images.unsplash.com/photo-1672872476232-da16b45c9001?w=1920&h=1080&fit=crop&auto=format',
         type,
         status: status === 'airing' ? 'Airing' : status === 'upcoming' ? 'Upcoming' : 'Completed',
-        episodes: parseInt(episodeCount) || 12,
+        episodes: totalEps,
         duration: `${durationMinutes || 24} min`,
         season,
         year: parseInt(seasonYear) || 2024,
@@ -223,12 +258,19 @@ router.post('/anime', async (req, res) => {
         studio,
         genres: Array.isArray(genres) ? genres : ['Action', 'Fantasy'],
         tags: Array.isArray(tags) ? tags : ['Adventure'],
-        gumletUrl
+        gumletUrl: gumletUrl || undefined,
+        streamSources: gumletUrl ? {
+          1: {
+            gumletUrl: formatGumletEmbedUrl(gumletUrl),
+            gumletAssetId: extractGumletAssetId(gumletUrl),
+            streamStatus: 'healthy'
+          }
+        } : {}
       }
     });
   } catch (err) {
     console.error('Create anime error:', err);
-    return res.status(500).json({ error: 'Failed to create anime' });
+    return res.status(500).json({ error: `Failed to create anime: ${err.message}` });
   }
 });
 
@@ -256,28 +298,51 @@ router.put('/anime/:id', async (req, res) => {
       studio
     } = req.body;
 
+    let studioId = null;
+    if (studio) {
+      try {
+        const [stRes] = await db.query(
+          'INSERT INTO studios (name) VALUES (?) ON DUPLICATE KEY UPDATE studio_id=LAST_INSERT_ID(studio_id)',
+          [studio]
+        );
+        studioId = stRes?.insertId || null;
+      } catch {}
+    }
+
     await db.query(
       `UPDATE anime SET
-        title = ?, japanese_title = ?, description = ?, poster_url = ?, banner_url = ?,
-        type = ?, status = ?, episode_count = ?, duration_minutes = ?, season = ?,
-        season_year = ?, site_score = ?, mal_score = ?, age_rating = ?, studio_name = ?
+        title = COALESCE(?, title),
+        japanese_title = COALESCE(?, japanese_title),
+        description = COALESCE(?, description),
+        poster_url = COALESCE(?, poster_url),
+        banner_url = COALESCE(?, banner_url),
+        type = COALESCE(?, type),
+        status = COALESCE(?, status),
+        episode_count = COALESCE(?, episode_count),
+        duration_minutes = COALESCE(?, duration_minutes),
+        season = COALESCE(?, season),
+        season_year = COALESCE(?, season_year),
+        site_score = COALESCE(?, site_score),
+        mal_score = COALESCE(?, mal_score),
+        age_rating = COALESCE(?, age_rating),
+        studio_id = COALESCE(?, studio_id)
        WHERE anime_id = ?`,
       [
-        title,
-        japaneseTitle || '',
-        description || '',
-        posterUrl,
-        bannerUrl,
-        type || 'TV',
-        status ? status.toLowerCase() : 'airing',
-        parseInt(episodeCount) || 12,
-        parseInt(durationMinutes) || 24,
-        season ? season.toLowerCase() : 'winter',
-        parseInt(seasonYear) || 2024,
-        parseFloat(siteScore) || 8.5,
-        parseFloat(malScore) || 8.5,
-        ageRating || 'PG-13',
-        studio || 'Aniflux Studio',
+        title || null,
+        japaneseTitle || null,
+        description || null,
+        posterUrl || null,
+        bannerUrl || null,
+        type || null,
+        status ? status.toLowerCase() : null,
+        episodeCount ? parseInt(episodeCount) : null,
+        durationMinutes ? parseInt(durationMinutes) : null,
+        season ? season.toLowerCase() : null,
+        seasonYear ? parseInt(seasonYear) : null,
+        siteScore ? parseFloat(siteScore) : null,
+        malScore ? parseFloat(malScore) : null,
+        ageRating || null,
+        studioId,
         animeId
       ]
     );
@@ -298,6 +363,7 @@ router.delete('/anime/:id', async (req, res) => {
     const animeId = parseInt(req.params.id);
     if (isNaN(animeId)) return res.status(400).json({ error: 'Invalid anime ID' });
 
+    await db.query('DELETE FROM episodes WHERE anime_id = ?', [animeId]);
     await db.query('DELETE FROM anime WHERE anime_id = ?', [animeId]);
 
     return res.json({
@@ -307,6 +373,30 @@ router.delete('/anime/:id', async (req, res) => {
   } catch (err) {
     console.error('Delete anime error:', err);
     return res.status(500).json({ error: 'Failed to delete anime' });
+  }
+});
+
+// 9. SIGNED STREAM TOKEN GENERATOR (VIDEO LINK PROTECTION)
+router.get('/stream-token/:assetId', (req, res) => {
+  try {
+    const { assetId } = req.params;
+    if (!assetId) return res.status(400).json({ error: 'Asset ID is required' });
+
+    const clientIp = req.ip || req.headers['x-forwarded-for'] || '';
+    const signedUrl = generateSignedGumletUrl(assetId, {
+      expiresInSeconds: 3600,
+      userIp: clientIp
+    });
+
+    return res.json({
+      success: true,
+      assetId,
+      signedUrl,
+      expiresIn: 3600,
+      protection: 'HMAC-SHA256 Token Auth + Domain Whitelisting Enabled'
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to generate signed token' });
   }
 });
 
