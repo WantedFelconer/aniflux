@@ -274,19 +274,64 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
   }
 
   // Open Episode Manager
-  const handleOpenEpisodeManager = (anime: Anime) => {
+  const handleOpenEpisodeManager = async (anime: Anime) => {
     setSelectedAnimeForEpisodes(anime)
     setSelectedEpNumber(1)
-    const epSource = anime.streamSources?.[1]
-    const initialUrl = epSource?.gumletUrl || anime.gumletUrl || ''
+    setIsEpisodeModalOpen(true)
+
+    // Initial Ep 1 setup
+    const ep1Source = anime.streamSources?.[1]
+    const initialUrl = ep1Source?.gumletUrl || anime.gumletUrl || ''
     setEpTitleInput(anime.episodeTitles?.[0] || 'Episode 1')
     setEpGumletInput(initialUrl)
     setEpValidationState({
-      status: initialUrl ? (epSource?.streamStatus === 'broken' ? 'invalid' : 'valid') : 'idle',
-      message: epSource?.errorMessage || (initialUrl ? 'Active Gumlet stream' : undefined),
+      status: initialUrl ? (ep1Source?.streamStatus === 'broken' ? 'invalid' : 'valid') : 'idle',
+      message: ep1Source?.errorMessage || (initialUrl ? 'Active Gumlet stream' : undefined),
       assetId: extractGumletAssetId(initialUrl)
     })
-    setIsEpisodeModalOpen(true)
+
+    // Fetch live episode sources from backend database
+    try {
+      const res = await fetch(`/api/anime/${anime.id}/episodes`, { credentials: 'include' })
+      if (res.ok) {
+        const json = await res.json()
+        if (Array.isArray(json.episodes)) {
+          const map: Record<number, any> = {}
+          const titles: string[] = []
+          for (const ep of json.episodes) {
+            titles[ep.episodeNumber - 1] = ep.title || `Episode ${ep.episodeNumber}`
+            if (ep.gumletUrl || ep.assetId) {
+              map[ep.episodeNumber] = {
+                gumletUrl: ep.gumletUrl,
+                gumletAssetId: ep.assetId,
+                streamStatus: ep.streamStatus,
+                subtitleTracks: ep.subtitleTracks,
+                errorMessage: ep.errorMessage
+              }
+            }
+          }
+
+          setSelectedAnimeForEpisodes(prev => {
+            if (!prev) return null
+            return {
+              ...prev,
+              episodeTitles: titles.length > 0 ? titles : prev.episodeTitles,
+              streamSources: map
+            }
+          })
+
+          const liveEp1 = map[1]
+          if (liveEp1?.gumletUrl) {
+            setEpGumletInput(liveEp1.gumletUrl)
+            setEpValidationState({
+              status: liveEp1.streamStatus === 'broken' ? 'invalid' : 'valid',
+              message: liveEp1.errorMessage || 'Verified Gumlet stream',
+              assetId: liveEp1.gumletAssetId || extractGumletAssetId(liveEp1.gumletUrl)
+            })
+          }
+        }
+      }
+    } catch {}
   }
 
   // Switch Episode in Editor
@@ -294,7 +339,8 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
     if (!selectedAnimeForEpisodes) return
     setSelectedEpNumber(epNum)
     const epSource = selectedAnimeForEpisodes.streamSources?.[epNum]
-    const currentUrl = epSource?.gumletUrl || selectedAnimeForEpisodes.gumletUrl || ''
+    // Per-episode isolation: only episode 1 may use default anime link if empty; episodes > 1 only show their own configured link
+    const currentUrl = epSource?.gumletUrl || (epNum === 1 ? selectedAnimeForEpisodes.gumletUrl || '' : '')
     setEpTitleInput(selectedAnimeForEpisodes.episodeTitles?.[epNum - 1] || `Episode ${epNum}`)
     setEpGumletInput(currentUrl)
     setEpValidationState({
@@ -395,6 +441,10 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
       updateAnime(selectedAnimeForEpisodes.id, { episodeTitles: updatedTitles })
     }
 
+    if (selectedEpNumber === 1 && formattedUrl) {
+      updateAnime(selectedAnimeForEpisodes.id, { gumletUrl: formattedUrl })
+    }
+
     // Update local state in modal immediately
     setSelectedAnimeForEpisodes(prev => {
       if (!prev) return null
@@ -414,7 +464,7 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
       }
     })
 
-    showToast(`Episode ${selectedEpNumber} Gumlet stream updated and verified! 🎬`)
+    showToast(`Episode ${selectedEpNumber} Gumlet stream saved and synced! 🎬`)
   }
 
   // Quick Repair Action

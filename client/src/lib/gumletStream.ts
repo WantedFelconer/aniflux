@@ -152,7 +152,7 @@ export function validateGumletUrlClient(url: string | undefined | null): {
 }
 
 /**
- * Resolves episode Gumlet stream source with per-episode priority and fallback.
+ * Resolves episode Gumlet stream source with strict per-episode link isolation.
  */
 export function resolveGumletEpisodeStream(
   animeId: number,
@@ -161,18 +161,39 @@ export function resolveGumletEpisodeStream(
   streamSourcesMap?: Record<number, any>
 ): GumletStreamSource {
   const epData = streamSourcesMap?.[episodeNumber];
-  // 1. Specific Episode Gumlet URL takes highest priority
-  const epUrl = epData?.gumletUrl;
-  // 2. Default whole-anime fallback if no per-episode URL was set
-  const urlToUse = epUrl || defaultAnimeUrl || (animeId <= 3 ? SAMPLE_GUMLET_EMBED : '');
-  const assetId = extractGumletAssetId(urlToUse) || epData?.gumletAssetId || (urlToUse ? extractGumletAssetId(urlToUse) : null) || SAMPLE_GUMLET_ASSET_ID;
-  const status = epData?.streamStatus || (urlToUse ? 'healthy' : 'unverified');
+  // 1. Specific Episode Gumlet URL
+  let urlToUse = epData?.gumletUrl?.trim() || '';
+
+  // 2. Default whole-anime URL ONLY applies to Episode 1 if not explicitly set
+  if (!urlToUse && episodeNumber === 1 && defaultAnimeUrl?.trim()) {
+    urlToUse = defaultAnimeUrl.trim();
+  }
+
+  // 3. Built-in sample fallback only for mock demo IDs 1..3 on Episode 1
+  if (!urlToUse && animeId <= 3 && episodeNumber === 1) {
+    urlToUse = SAMPLE_GUMLET_EMBED;
+  }
+
+  if (!urlToUse) {
+    return {
+      id: `gumlet-ep-${episodeNumber}`,
+      name: `Gumlet Stream (Ep ${episodeNumber})`,
+      assetId: null,
+      embedUrl: '',
+      streamStatus: 'unverified',
+      errorMessage: `Episode ${episodeNumber} video has not been uploaded or configured yet.`,
+      subtitleTracks: [],
+    };
+  }
+
+  const assetId = extractGumletAssetId(urlToUse) || epData?.gumletAssetId || 'custom';
+  const status = epData?.streamStatus || 'healthy';
 
   return {
     id: `gumlet-ep-${episodeNumber}`,
     name: `Gumlet Adaptive Stream (Ep ${episodeNumber})`,
     assetId,
-    embedUrl: formatGumletEmbedUrl(urlToUse || assetId),
+    embedUrl: formatGumletEmbedUrl(urlToUse),
     streamStatus: status,
     errorMessage: epData?.errorMessage,
     subtitleTracks: epData?.subtitleTracks || [
