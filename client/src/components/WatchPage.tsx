@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { animeData, type Anime } from '../data/animeData'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import GumletPlayer from './GumletPlayer'
 import EpisodeComments from './EpisodeComments'
+import AuthModal from './AuthModal'
 import {
   extractGumletAssetId,
   formatGumletEmbedUrl,
@@ -18,9 +20,11 @@ interface WatchPageProps {
 
 export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProps) {
   const { addHistory, bookmarks, toggleBookmark } = useApp()
+  const { isAuthenticated, user: authUser } = useAuth()
   const [currentEp, setCurrentEp] = useState(1)
   const [activeTab, setActiveTab] = useState<'Episodes' | 'Comments' | 'Details' | 'Gumlet Info'>('Episodes')
-  const [comment, setComment] = useState('')
+  const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [authModalView, setAuthModalView] = useState<'login' | 'register'>('login')
 
   const totalEps = anime.episodes || 12
   const [liveStreamSources, setLiveStreamSources] = useState<Record<number, any>>(anime.streamSources || {})
@@ -32,14 +36,24 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
 
     async function loadEpisodes() {
       try {
-        const res = await fetch(`/api/anime/${anime.id}/episodes`, { credentials: 'include' })
+        const token = localStorage.getItem('aniflux_auth_token')
+        const headers: Record<string, string> = { 'Accept': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        if (authUser?.id) headers['X-User-Id'] = String(authUser.id)
+
+        const res = await fetch(`/api/anime/${anime.id}/episodes`, {
+          headers,
+          credentials: 'include'
+        })
         if (res.ok) {
           const json = await res.json()
           if (isMounted && Array.isArray(json.episodes)) {
             const map: Record<number, any> = {}
             for (const ep of json.episodes) {
-              if (ep.gumletUrl || ep.assetId) {
+              if (ep.playerUrl || ep.embedUrl || ep.gumletUrl || ep.assetId) {
                 map[ep.episodeNumber] = {
+                  playerUrl: ep.playerUrl,
+                  embedUrl: ep.embedUrl,
                   gumletUrl: ep.gumletUrl,
                   gumletAssetId: ep.assetId,
                   streamStatus: ep.streamStatus,
@@ -58,7 +72,7 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
 
     loadEpisodes()
     return () => { isMounted = false }
-  }, [anime.id, anime.streamSources])
+  }, [anime.id, anime.streamSources, isAuthenticated, authUser])
 
   // Resolve current episode stream source with per-episode link priority
   const currentStream: GumletStreamSource = useMemo(() => {
@@ -66,24 +80,30 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
       anime.id,
       currentEp,
       anime.gumletUrl,
-      liveStreamSources
+      liveStreamSources,
+      isAuthenticated
     )
-  }, [anime.id, anime.gumletUrl, currentEp, liveStreamSources])
+  }, [anime.id, anime.gumletUrl, currentEp, liveStreamSources, isAuthenticated])
 
-  // Log to watch history
+  // Log to watch history only if authenticated
   useEffect(() => {
-    addHistory(anime, currentEp)
-  }, [anime.id, currentEp])
+    if (isAuthenticated) {
+      addHistory(anime, currentEp)
+    }
+  }, [anime.id, currentEp, isAuthenticated])
 
   const isBookmarked = bookmarks.has(anime.id)
   const episodeTitle = anime.episodeTitles?.[currentEp - 1] || `Episode ${currentEp}`
 
-  const comments = [
-    { user: 'KiritoFan99', text: 'This Gumlet adaptive stream is silky smooth at 1080p 60fps! 🔥', time: '2h ago', likes: 142 },
-    { user: 'AnimeQueen', text: 'The fight scene at 18:32 gave me chills! Crystal clear video quality.', time: '5h ago', likes: 89 },
-    { user: 'SakuraBlossom', text: 'Love the subtitle support and responsive Gumlet player! 💜', time: '8h ago', likes: 67 },
-    { user: 'TokyoGhoulFan', text: 'Been waiting for this arc. Worth every second of the wait.', time: '1d ago', likes: 215 },
-  ]
+  const handleEpisodeSelect = (epNum: number) => {
+    if (!isAuthenticated) {
+      setAuthModalView('login')
+      setAuthModalOpen(true)
+      return
+    }
+    setCurrentEp(epNum)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   return (
     <div className="min-h-screen" style={{ background: '#09090b', paddingTop: 0 }}>
@@ -138,14 +158,23 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
               animeTitle={anime.title}
               episodeNumber={currentEp}
               episodeTitle={episodeTitle}
-              streamStatus={currentStream.streamStatus}
+              streamStatus={!isAuthenticated ? 'locked' : currentStream.streamStatus}
               errorMessage={currentStream.errorMessage}
               subtitleTracks={currentStream.subtitleTracks}
               poster={anime.banner}
+              isLocked={!isAuthenticated}
+              onSignInClick={() => {
+                setAuthModalView('login')
+                setAuthModalOpen(true)
+              }}
+              onRegisterClick={() => {
+                setAuthModalView('register')
+                setAuthModalOpen(true)
+              }}
               hasPrev={currentEp > 1}
               hasNext={currentEp < totalEps}
-              onPrevEpisode={() => setCurrentEp(Math.max(1, currentEp - 1))}
-              onNextEpisode={() => setCurrentEp(Math.min(totalEps, currentEp + 1))}
+              onPrevEpisode={() => isAuthenticated ? setCurrentEp(Math.max(1, currentEp - 1)) : handleEpisodeSelect(currentEp - 1)}
+              onNextEpisode={() => isAuthenticated ? setCurrentEp(Math.min(totalEps, currentEp + 1)) : handleEpisodeSelect(currentEp + 1)}
             />
 
             {/* Stream Status Info Bar */}
@@ -213,10 +242,7 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
                     return (
                       <button
                         key={epNum}
-                        onClick={() => {
-                          setCurrentEp(epNum)
-                          window.scrollTo({ top: 0, behavior: 'smooth' })
-                        }}
+                        onClick={() => handleEpisodeSelect(epNum)}
                         className="py-2.5 px-2 rounded-xl flex flex-col items-center justify-center text-xs font-semibold transition-all hover:scale-105"
                         style={{
                           background: isCurrent ? 'linear-gradient(135deg, #6d3bff, #ff4db8)' : '#1b1d23',
@@ -228,7 +254,7 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
                       >
                         <span className="font-bold text-sm">{epNum}</span>
                         <span className="text-[10px] opacity-75 truncate max-w-full">
-                          {anime.episodeTitles?.[i] ? `Ep ${epNum}` : 'Sub'}
+                          {!isAuthenticated ? '🔒 Ep ' + epNum : (anime.episodeTitles?.[i] ? `Ep ${epNum}` : 'Sub')}
                         </span>
                       </button>
                     )
@@ -270,28 +296,30 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
               <div className="fade-in p-5 rounded-2xl flex flex-col gap-4" style={{ background: '#111216', border: '1px solid #23252b' }}>
                 <div>
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <span>⚡</span> Gumlet Video Streaming Engine
+                    <span>⚡</span> Protected Video Streaming Engine
                   </h3>
                   <p className="text-xs text-gray-400 mt-1">
-                    Integrated with Gumlet Video infrastructure for HLS/DASH adaptive bitrate streaming, ultra-low latency playback, and dynamic subtitle track switching.
+                    Integrated with Gumlet Video infrastructure with tokenized authentication, anti-hotlinking protection, and dynamic subtitle track switching.
                   </p>
                 </div>
 
                 <div className="p-3.5 rounded-xl border" style={{ background: '#1b1d23', borderColor: '#2e313d' }}>
                   <div className="flex items-center gap-2 text-xs font-bold text-purple-400 mb-1">
-                    <span>📡</span> Active Gumlet Embed URL
+                    <span>🛡️</span> Stream Security Status
                   </div>
                   <span className="text-[11px] font-mono text-gray-300 break-all block bg-black/40 p-2.5 rounded-lg">
-                    {currentStream.embedUrl || 'Default Gumlet Demo Stream'}
+                    {isAuthenticated
+                      ? `Active Authenticated Session • Tokenized DRM Gateway (Ep ${currentEp})`
+                      : 'Stream Locked — Authentication Required to Initialize CDN Player'}
                   </span>
                 </div>
 
                 <div className="p-3.5 rounded-xl border" style={{ background: '#1b1d23', borderColor: '#2e313d' }}>
                   <div className="flex items-center gap-2 text-xs font-bold text-purple-400 mb-1">
-                    <span>📡</span> Gumlet Player Status
+                    <span>📡</span> Stream Health
                   </div>
                   <span className="text-[11px] font-mono text-gray-300 break-all block bg-black/40 p-2.5 rounded-lg">
-                    {currentStream.streamStatus === 'healthy' ? 'Verified High-Definition Stream' : 'Stream Ready'}
+                    {isAuthenticated ? '✓ 1080p 60fps Adaptive HLS Stream' : '🔒 Locked for Guests'}
                   </span>
                 </div>
               </div>
@@ -307,6 +335,15 @@ export default function WatchPage({ anime, onBack, onAnimeClick }: WatchPageProp
           </div>
         </div>
       </div>
+
+      {/* Auth Modal for Guests attempting to watch or select episodes */}
+      {authModalOpen && (
+        <AuthModal
+          initialView={authModalView}
+          onClose={() => setAuthModalOpen(false)}
+          onSuccess={() => setAuthModalOpen(false)}
+        />
+      )}
     </div>
   )
 }

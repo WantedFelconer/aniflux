@@ -10,7 +10,7 @@ interface GumletPlayerProps {
   animeTitle: string
   episodeNumber: number
   episodeTitle?: string
-  streamStatus?: 'healthy' | 'broken' | 'unverified' | 'pending'
+  streamStatus?: 'healthy' | 'broken' | 'unverified' | 'pending' | 'locked'
   errorMessage?: string | null
   subtitleTracks?: SubtitleTrack[]
   poster?: string
@@ -18,6 +18,9 @@ interface GumletPlayerProps {
   onPrevEpisode?: () => void
   hasPrev?: boolean
   hasNext?: boolean
+  isLocked?: boolean
+  onSignInClick?: () => void
+  onRegisterClick?: () => void
 }
 
 export default function GumletPlayer({
@@ -33,6 +36,9 @@ export default function GumletPlayer({
   onPrevEpisode,
   hasPrev = false,
   hasNext = false,
+  isLocked = false,
+  onSignInClick,
+  onRegisterClick,
 }: GumletPlayerProps) {
   const [playerOptions, setPlayerOptions] = useState<GumletPlayerOptions>({
     autoplay: true,
@@ -57,8 +63,13 @@ export default function GumletPlayer({
     setIsRetrying(false)
   }, [urlOrAssetId, episodeNumber])
 
-  const embedSrc = formatGumletEmbedUrl(urlOrAssetId, playerOptions)
-  const isBroken = streamStatus === 'broken' || isManualError
+  const isStreamLocked = isLocked || streamStatus === 'locked'
+  const isDirectPath = urlOrAssetId?.startsWith('/')
+  const embedSrc = isDirectPath
+    ? urlOrAssetId
+    : (urlOrAssetId && urlOrAssetId !== 'locked' ? formatGumletEmbedUrl(urlOrAssetId, playerOptions) : '')
+
+  const isBroken = !isStreamLocked && (streamStatus === 'broken' || isManualError)
 
   const handleRetry = () => {
     setIsRetrying(true)
@@ -71,7 +82,8 @@ export default function GumletPlayer({
 
   return (
     <div
-      className={`relative w-full rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 ${
+      onContextMenu={e => e.preventDefault()}
+      className={`relative w-full rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 select-none ${
         isTheaterMode ? 'z-40 max-w-full' : ''
       }`}
       style={{
@@ -91,13 +103,19 @@ export default function GumletPlayer({
           <span
             className="px-2 py-0.5 rounded-md font-extrabold text-[10px] tracking-wider uppercase flex items-center gap-1 shrink-0"
             style={{
-              background: 'linear-gradient(135deg, rgba(109,59,255,0.25), rgba(255,77,184,0.25))',
-              color: '#c084fc',
-              border: '1px solid rgba(192,132,252,0.3)',
+              background: isStreamLocked
+                ? 'rgba(239, 68, 68, 0.15)'
+                : 'linear-gradient(135deg, rgba(109,59,255,0.25), rgba(255,77,184,0.25))',
+              color: isStreamLocked ? '#f87171' : '#c084fc',
+              border: isStreamLocked ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(192,132,252,0.3)',
             }}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Gumlet Stream
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                isStreamLocked ? 'bg-red-400' : 'bg-emerald-400 animate-pulse'
+              }`}
+            />
+            {isStreamLocked ? 'Stream Locked' : 'Secure Stream'}
           </span>
           <span className="text-gray-300 font-semibold truncate text-[11px]">
             {animeTitle} — Ep {episodeNumber}: {episodeTitle || `Episode ${episodeNumber}`}
@@ -108,35 +126,41 @@ export default function GumletPlayer({
         <div className="flex items-center gap-2 shrink-0">
           <span
             className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 ${
-              isBroken
+              isStreamLocked
+                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                : isBroken
                 ? 'bg-red-500/20 text-red-400 border border-red-500/30'
                 : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
             }`}
           >
-            {isBroken ? '⚠️ Broken Stream' : '✓ 1080p Adaptive'}
+            {isStreamLocked ? '🔒 Login Required' : isBroken ? '⚠️ Broken Stream' : '✓ 1080p Protected'}
           </span>
 
-          <button
-            onClick={() => setIsOptionsOpen(!isOptionsOpen)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-            title="Player Settings & Subtitles"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
+          {!isStreamLocked && (
+            <>
+              <button
+                onClick={() => setIsOptionsOpen(!isOptionsOpen)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                title="Player Settings & Subtitles"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
 
-          <button
-            onClick={() => setIsTheaterMode(!isTheaterMode)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors hidden sm:inline-flex"
-            title={isTheaterMode ? 'Exit Theater Mode' : 'Theater Mode'}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="2" y="4" width="20" height="16" rx="2" />
-              <path d="M10 4v16" />
-            </svg>
-          </button>
+              <button
+                onClick={() => setIsTheaterMode(!isTheaterMode)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors hidden sm:inline-flex"
+                title={isTheaterMode ? 'Exit Theater Mode' : 'Theater Mode'}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="M10 4v16" />
+                </svg>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -145,7 +169,68 @@ export default function GumletPlayer({
         className="relative w-full overflow-hidden bg-black"
         style={{ aspectRatio: '16/9' }}
       >
-        {isBroken ? (
+        {isStreamLocked ? (
+          /* Locked State View (Guest / Not Signed In) */
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-20 overflow-hidden">
+            {poster && (
+              <img
+                src={poster}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover opacity-20 filter blur-md scale-105"
+              />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-b from-[#090a0f]/90 via-[#0d0e15]/95 to-[#090a0f]" />
+
+            <div className="relative z-10 max-w-md flex flex-col items-center">
+              <div
+                className="w-16 h-16 rounded-3xl flex items-center justify-center mb-4 shadow-2xl"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(109,59,255,0.25), rgba(255,77,184,0.25))',
+                  border: '1px solid rgba(192,132,252,0.4)',
+                }}
+              >
+                <span className="text-3xl">🔒</span>
+              </div>
+
+              <h2 className="text-xl sm:text-2xl font-black text-white mb-2 tracking-tight">
+                Episode Streaming Locked
+              </h2>
+              <p className="text-xs sm:text-sm text-gray-300 mb-6 leading-relaxed">
+                Watching anime on Aniflux requires a free registered account. Log in or create your account to stream Episode {episodeNumber} in 1080p Ultra-HD with subtitle sync.
+              </p>
+
+              <div className="flex items-center gap-3 flex-wrap justify-center">
+                {onSignInClick && (
+                  <button
+                    onClick={onSignInClick}
+                    className="px-6 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 shadow-xl"
+                    style={{
+                      background: 'linear-gradient(135deg, #6d3bff, #ff4db8)',
+                      boxShadow: '0 4px 20px rgba(109,59,255,0.4)',
+                    }}
+                  >
+                    Sign In to Watch
+                  </button>
+                )}
+
+                {onRegisterClick && (
+                  <button
+                    onClick={onRegisterClick}
+                    className="px-6 py-2.5 rounded-xl text-xs font-bold text-purple-200 bg-purple-950/40 hover:bg-purple-900/50 border border-purple-600/40 transition-all hover:scale-105"
+                  >
+                    Create Free Account
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-6 flex items-center gap-4 text-[11px] text-gray-400">
+                <span className="flex items-center gap-1">✓ Ad-Free 1080p</span>
+                <span className="flex items-center gap-1">✓ Cloud Watch Progress</span>
+                <span className="flex items-center gap-1">✓ Episode Discussion</span>
+              </div>
+            </div>
+          </div>
+        ) : isBroken ? (
           /* Error Fallback Card */
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-gradient-to-b from-[#14161f] to-[#0a0b10] z-20">
             <div
@@ -163,15 +248,12 @@ export default function GumletPlayer({
             </div>
 
             <h3 className="text-lg font-black text-white mb-1.5">
-              Gumlet Video Stream Unavailable
+              Video Stream Unavailable
             </h3>
-            <p className="text-xs text-gray-400 max-w-md mb-2 leading-relaxed">
+            <p className="text-xs text-gray-400 max-w-md mb-4 leading-relaxed">
               {errorMessage ||
                 'The stream URL for this episode could not be reached or has been flagged for supervisor review.'}
             </p>
-            <span className="text-[10px] text-purple-400 font-mono mb-5 bg-purple-950/40 px-2.5 py-1 rounded-full border border-purple-800/50">
-              Asset: {urlOrAssetId || 'No URL configured'}
-            </span>
 
             <div className="flex items-center gap-3">
               <button
@@ -207,7 +289,7 @@ export default function GumletPlayer({
             </div>
           </div>
         ) : (
-          /* Live Gumlet Player Embed */
+          /* Live Protected Stream Player Embed */
           <div className="w-full h-full relative">
             {!hasIframeLoaded && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10">
@@ -219,21 +301,45 @@ export default function GumletPlayer({
                   }}
                 />
                 <p className="text-xs text-gray-400 mt-3 font-medium">
-                  Connecting to Gumlet Adaptive CDN...
+                  Connecting to Secure Stream CDN...
                 </p>
               </div>
             )}
 
-            <iframe
-              key={embedSrc}
-              src={embedSrc}
-              title={`${animeTitle} Episode ${episodeNumber}`}
-              className="w-full h-full border-0 absolute inset-0"
-              allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-              allowFullScreen
-              onLoad={() => setHasIframeLoaded(true)}
-              onError={() => setIsManualError(true)}
-            />
+            {embedSrc && (
+              <iframe
+                key={embedSrc}
+                src={embedSrc}
+                title={`${animeTitle} Episode ${episodeNumber}`}
+                className="w-full h-full border-0 absolute inset-0"
+                allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                allowFullScreen
+                onLoad={() => setHasIframeLoaded(true)}
+                onError={() => setIsManualError(true)}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Floating Episode Quick Controls on Hover */}
+        {!isStreamLocked && (
+          <div className="absolute bottom-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+            {hasPrev && onPrevEpisode && (
+              <button
+                onClick={onPrevEpisode}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-white backdrop-blur-md bg-black/70 hover:bg-black/90 border border-white/10 transition-transform hover:scale-105"
+              >
+                ⏮ Ep {episodeNumber - 1}
+              </button>
+            )}
+            {hasNext && onNextEpisode && (
+              <button
+                onClick={onNextEpisode}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-white backdrop-blur-md bg-black/70 hover:bg-black/90 border border-white/10 transition-transform hover:scale-105"
+              >
+                Ep {episodeNumber + 1} ⏭
+              </button>
+            )}
           </div>
         )}
 

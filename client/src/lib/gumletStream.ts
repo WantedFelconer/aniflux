@@ -153,49 +153,38 @@ export function validateGumletUrlClient(url: string | undefined | null): {
 
 /**
  * Resolves episode Gumlet stream source with strict per-episode link isolation.
+ * Uses secure backend stream player endpoint to prevent raw URL leakage.
  */
 export function resolveGumletEpisodeStream(
   animeId: number,
   episodeNumber: number,
   defaultAnimeUrl?: string,
-  streamSourcesMap?: Record<number, any>
+  streamSourcesMap?: Record<number, any>,
+  isAuthenticated = false
 ): GumletStreamSource {
-  const epData = streamSourcesMap?.[episodeNumber];
-  // 1. Specific Episode Gumlet URL
-  let urlToUse = epData?.gumletUrl?.trim() || '';
-
-  // 2. Default whole-anime URL ONLY applies to Episode 1 if not explicitly set
-  if (!urlToUse && episodeNumber === 1 && defaultAnimeUrl?.trim()) {
-    urlToUse = defaultAnimeUrl.trim();
-  }
-
-  // 3. Built-in sample fallback only for mock demo IDs 1..3 on Episode 1
-  if (!urlToUse && animeId <= 3 && episodeNumber === 1) {
-    urlToUse = SAMPLE_GUMLET_EMBED;
-  }
-
-  if (!urlToUse) {
+  if (!isAuthenticated) {
     return {
       id: `gumlet-ep-${episodeNumber}`,
-      name: `Gumlet Stream (Ep ${episodeNumber})`,
-      assetId: null,
+      name: `Stream Locked (Ep ${episodeNumber})`,
+      assetId: 'locked',
       embedUrl: '',
       streamStatus: 'unverified',
-      errorMessage: `Episode ${episodeNumber} video has not been uploaded or configured yet.`,
+      errorMessage: 'Authentication required. Please sign in or register to watch.',
       subtitleTracks: [],
     };
   }
 
-  const assetId = extractGumletAssetId(urlToUse) || epData?.gumletAssetId || 'custom';
-  const status = epData?.streamStatus || 'healthy';
+  const epData = streamSourcesMap?.[episodeNumber];
+  // Secure backend gateway player URL
+  const securePlayerUrl = epData?.playerUrl || epData?.embedUrl || `/api/stream/player/${animeId}/${episodeNumber}`;
 
   return {
-    id: `gumlet-ep-${episodeNumber}`,
-    name: `Gumlet Adaptive Stream (Ep ${episodeNumber})`,
-    assetId,
-    embedUrl: formatGumletEmbedUrl(urlToUse),
-    streamStatus: status,
-    errorMessage: epData?.errorMessage,
+    id: `stream-ep-${episodeNumber}`,
+    name: `Protected Stream (Ep ${episodeNumber})`,
+    assetId: 'protected',
+    embedUrl: securePlayerUrl,
+    streamStatus: epData?.streamStatus || 'healthy',
+    errorMessage: epData?.errorMessage || null,
     subtitleTracks: epData?.subtitleTracks || [
       { label: 'English', src: '', srclang: 'en', default: true },
       { label: 'Japanese', src: '', srclang: 'ja' },

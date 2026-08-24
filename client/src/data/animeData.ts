@@ -32,15 +32,19 @@ export interface Anime {
   staff: StaffMember[]
   episodeTitles: string[]
   relations: { type: string; animeId: number }[]
+  streamLocked?: boolean
+  playerUrl?: string | null
   gumletUrl?: string
   gumletAssetId?: string
-  streamStatus?: 'healthy' | 'broken' | 'unverified' | 'pending'
+  streamStatus?: 'healthy' | 'broken' | 'unverified' | 'pending' | 'locked'
   streamSources?: Record<
     number,
     {
+      playerUrl?: string
+      embedUrl?: string
       gumletUrl?: string
       gumletAssetId?: string
-      streamStatus?: 'healthy' | 'broken' | 'unverified' | 'pending'
+      streamStatus?: 'healthy' | 'broken' | 'unverified' | 'pending' | 'locked'
       errorMessage?: string | null
       subtitleTracks?: { label: string; src: string; srclang: string; default?: boolean }[]
     }

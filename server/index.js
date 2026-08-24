@@ -9,6 +9,7 @@ import animeRoutes from './routes/anime.js';
 import meRoutes from './routes/me.js';
 import adminRoutes from './routes/admin.js';
 import commentsRoutes from './routes/comments.js';
+import streamRoutes from './routes/stream.js';
 import streamSupervisor from './services/supervisor.js';
 import db from './db.js';
 
@@ -65,6 +66,7 @@ app.use(['/api/auth/forgot-password', '/auth/forgot-password'], authLimiter);
 // API Routes
 app.use(['/api/auth', '/auth'], authRoutes);
 app.use(['/api/anime', '/anime'], animeRoutes);
+app.use(['/api/stream', '/stream'], streamRoutes);
 app.use(['/api/me', '/me'], meRoutes);
 app.use(['/api/admin', '/admin'], adminRoutes);
 app.use(['/api/anime/:id/episodes/:epNumber/comments', '/anime/:id/episodes/:epNumber/comments'], commentsRoutes);

@@ -10,7 +10,7 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
-async function formatAnimeRow(conn, animeRow) {
+async function formatAnimeRow(conn, animeRow, isAuthenticated = false) {
   const animeId = animeRow.anime_id;
 
   // Studio
@@ -52,7 +52,7 @@ async function formatAnimeRow(conn, animeRow) {
     if (tags && tags.length > 0) tagList = tags.map(t => t.name);
   } catch {}
 
-  // Episodes with Gumlet Streaming Data
+  // Episodes
   let episodes = [];
   try {
     const [epRows] = await conn.query(
@@ -65,20 +65,24 @@ async function formatAnimeRow(conn, animeRow) {
 
   const episodeTitles = episodes.map(e => e.title || `Episode ${e.episode_number}`);
   const streamSources = {};
-  for (const ep of episodes) {
-    const targetUrl = ep.gumlet_url || (animeId <= 3 ? 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8' : '');
-    const assetId = ep.gumlet_asset_id || extractGumletAssetId(targetUrl) || (animeId <= 3 ? '65719bc42b91866ef114bca8' : '');
-    let subTracks = [];
-    try {
-      subTracks = typeof ep.subtitle_tracks === 'string' ? JSON.parse(ep.subtitle_tracks) : (ep.subtitle_tracks || []);
-    } catch {}
-    streamSources[ep.episode_number] = {
-      gumletUrl: targetUrl ? formatGumletEmbedUrl(targetUrl) : '',
-      gumletAssetId: assetId,
-      streamStatus: ep.stream_status || (targetUrl ? 'healthy' : 'unverified'),
-      errorMessage: ep.error_message || null,
-      subtitleTracks: Array.isArray(subTracks) ? subTracks : []
-    };
+
+  // Only expose stream endpoints to authenticated users
+  if (isAuthenticated) {
+    for (const ep of episodes) {
+      const targetUrl = ep.gumlet_url || (animeId <= 3 ? 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8' : '');
+      const assetId = ep.gumlet_asset_id || extractGumletAssetId(targetUrl) || (animeId <= 3 ? '65719bc42b91866ef114bca8' : '');
+      let subTracks = [];
+      try {
+        subTracks = typeof ep.subtitle_tracks === 'string' ? JSON.parse(ep.subtitle_tracks) : (ep.subtitle_tracks || []);
+      } catch {}
+      streamSources[ep.episode_number] = {
+        playerUrl: `/api/stream/player/${animeId}/${ep.episode_number}`,
+        gumletAssetId: assetId ? 'protected' : '',
+        streamStatus: ep.stream_status || (targetUrl ? 'healthy' : 'unverified'),
+        errorMessage: ep.error_message || null,
+        subtitleTracks: Array.isArray(subTracks) ? subTracks : []
+      };
+    }
   }
 
   // Relations
@@ -97,8 +101,9 @@ async function formatAnimeRow(conn, animeRow) {
   } catch {}
 
   const ep1 = episodes.find(e => e.episode_number === 1);
-  const defaultGumletUrl = ep1?.gumlet_url || (animeId <= 3 ? 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8' : '');
-  const defaultAssetId = ep1?.gumlet_asset_id || (defaultGumletUrl ? extractGumletAssetId(defaultGumletUrl) : '') || '';
+  const defaultGumletUrl = isAuthenticated
+    ? (ep1?.gumlet_url || (animeId <= 3 ? 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8' : ''))
+    : null;
 
   return {
     id: animeId,
@@ -125,6 +130,7 @@ async function formatAnimeRow(conn, animeRow) {
     season: capitalize(animeRow.season) || 'Winter',
     isNew: animeRow.status === 'airing',
     isDub: true,
+    streamLocked: !isAuthenticated,
     characters: [
       { name: 'Kaito Shiro', role: 'Main', va: 'Yuuki Kaji' },
       { name: 'Aria Vesper', role: 'Main', va: 'Ai Kayano' },
@@ -137,15 +143,16 @@ async function formatAnimeRow(conn, animeRow) {
     ],
     episodeTitles: episodeTitles.length > 0 ? episodeTitles : Array.from({ length: animeRow.episode_count || 12 }, (_, i) => `Episode ${i + 1}`),
     relations: relationList,
+    playerUrl: isAuthenticated ? `/api/stream/player/${animeId}/1` : null,
     gumletUrl: defaultGumletUrl,
-    gumletAssetId: defaultAssetId,
     streamSources
   };
 }
 
 // 1. GET CATALOG (/api/anime)
-router.get('/', async (req, res) => {
+router.get('/', optionalAuthenticate, async (req, res) => {
   try {
+    const isAuthenticated = Boolean(req.user);
     const page = Math.max(1, parseInt(req.query.page || '1'));
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit || '50')));
     const offset = (page - 1) * limit;
@@ -161,7 +168,7 @@ router.get('/', async (req, res) => {
     const data = [];
     for (const row of rows) {
       try {
-        data.push(await formatAnimeRow(db, row));
+        data.push(await formatAnimeRow(db, row, isAuthenticated));
       } catch (err) {
         console.error('Format row error for anime:', row.anime_id, err);
         data.push({
@@ -176,7 +183,8 @@ router.get('/', async (req, res) => {
           rating: parseFloat(row.site_score) || 8.5,
           year: row.season_year || 2024,
           episodes: row.episode_count || 12,
-          status: 'Airing'
+          status: 'Airing',
+          streamLocked: !isAuthenticated
         });
       }
     }
@@ -197,8 +205,9 @@ router.get('/', async (req, res) => {
 });
 
 // 2. SEARCH ANIME (/api/anime/search)
-router.get('/search', async (req, res) => {
+router.get('/search', optionalAuthenticate, async (req, res) => {
   try {
+    const isAuthenticated = Boolean(req.user);
     const queryStr = (req.query.q || '').toString().trim();
     const page = Math.max(1, parseInt(req.query.page || '1'));
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20')));
@@ -235,7 +244,7 @@ router.get('/search', async (req, res) => {
     const data = [];
     for (const row of rows) {
       try {
-        data.push(await formatAnimeRow(db, row));
+        data.push(await formatAnimeRow(db, row, isAuthenticated));
       } catch (err) {
         data.push({
           id: row.anime_id,
@@ -249,7 +258,8 @@ router.get('/search', async (req, res) => {
           rating: parseFloat(row.site_score) || 8.5,
           year: row.season_year || 2024,
           episodes: row.episode_count || 12,
-          status: 'Airing'
+          status: 'Airing',
+          streamLocked: !isAuthenticated
         });
       }
     }
@@ -282,7 +292,8 @@ router.get('/:id', optionalAuthenticate, async (req, res) => {
       return res.status(404).json({ error: 'Anime not found' });
     }
 
-    const animeObj = await formatAnimeRow(db, rows[0]);
+    const isAuthenticated = Boolean(req.user);
+    const animeObj = await formatAnimeRow(db, rows[0], isAuthenticated);
 
     let userState = { isFavorite: false, isBookmarked: false };
 
@@ -301,8 +312,8 @@ router.get('/:id', optionalAuthenticate, async (req, res) => {
   }
 });
 
-// 4. GET EPISODES WITH GUMLET STREAMS (/api/anime/:id/episodes)
-router.get('/:id/episodes', async (req, res) => {
+// 4. GET EPISODES WITH SECURE STREAMS (/api/anime/:id/episodes)
+router.get('/:id/episodes', optionalAuthenticate, async (req, res) => {
   try {
     const animeId = parseInt(req.params.id);
     if (isNaN(animeId)) {
@@ -320,15 +331,35 @@ router.get('/:id/episodes', async (req, res) => {
       [animeId]
     );
 
+    const isAuthenticated = Boolean(req.user);
+
     const formattedEpisodes = episodes.map(ep => {
       const targetUrl = ep.gumlet_url || (animeId <= 3 ? 'https://play.gumlet.io/embed/65719bc42b91866ef114bca8' : '');
       const assetId = ep.gumlet_asset_id || extractGumletAssetId(targetUrl);
+
+      if (!isAuthenticated) {
+        return {
+          episodeNumber: ep.episode_number,
+          title: ep.title || `Episode ${ep.episode_number}`,
+          playerUrl: null,
+          gumletUrl: null,
+          embedUrl: null,
+          assetId: null,
+          isLocked: true,
+          requiresAuth: true,
+          streamStatus: 'locked'
+        };
+      }
+
       return {
         episodeNumber: ep.episode_number,
         title: ep.title || `Episode ${ep.episode_number}`,
-        gumletUrl: targetUrl,
-        embedUrl: targetUrl ? formatGumletEmbedUrl(targetUrl) : '',
-        assetId,
+        playerUrl: `/api/stream/player/${animeId}/${ep.episode_number}`,
+        gumletUrl: null, // Masked from direct client exposure
+        embedUrl: `/api/stream/player/${animeId}/${ep.episode_number}`,
+        assetId: assetId ? 'protected' : '',
+        isLocked: false,
+        requiresAuth: false,
         streamStatus: ep.stream_status || (targetUrl ? 'healthy' : 'unverified'),
         lastCheckedAt: ep.last_checked_at,
         errorMessage: ep.error_message,
@@ -340,6 +371,7 @@ router.get('/:id/episodes', async (req, res) => {
       animeId,
       animeTitle: animeRows[0].title,
       totalEpisodes: formattedEpisodes.length,
+      streamLocked: !isAuthenticated,
       episodes: formattedEpisodes
     });
   } catch (err) {
