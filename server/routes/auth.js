@@ -45,28 +45,35 @@ router.post('/register', async (req, res) => {
     }
 
     // Check existing email
-    const [existingEmail] = await db.query('SELECT user_id FROM users WHERE email = ?', [email]);
-    if (existingEmail.length > 0) {
+    const [existingEmail] = await db.query('SELECT user_id FROM users WHERE LOWER(email) = LOWER(?)', [email]);
+    if (existingEmail && existingEmail.length > 0) {
       return res.status(409).json({ error: 'An account with this email address already exists' });
     }
 
     // Check existing username
-    const [existingUsername] = await db.query('SELECT user_id FROM users WHERE username = ?', [username]);
-    if (existingUsername.length > 0) {
+    const [existingUsername] = await db.query('SELECT user_id FROM users WHERE LOWER(username) = LOWER(?)', [username]);
+    if (existingUsername && existingUsername.length > 0) {
       return res.status(409).json({ error: 'This username is already taken' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
     const [insertResult] = await db.query(
-      `INSERT INTO users (username, email, password_hash, role, level) VALUES (?, ?, ?, 'member', 1)`,
+      `INSERT INTO users (username, email, password_hash, role, level, is_active) VALUES (?, ?, ?, 'member', 1, 1)`,
       [username, email, passwordHash]
     );
 
     const userId = insertResult.insertId;
+    if (!userId) {
+      throw new Error('Failed to generate user ID upon registration');
+    }
 
     // Create user preferences
-    await db.query(`INSERT IGNORE INTO user_preferences (user_id) VALUES (?)`, [userId]);
+    try {
+      await db.query(`INSERT IGNORE INTO user_preferences (user_id) VALUES (?)`, [userId]);
+    } catch (prefErr) {
+      console.warn('Non-fatal error creating default user preferences:', prefErr.message);
+    }
 
     // Create session
     const rawToken = crypto.randomBytes(32).toString('hex');
@@ -97,7 +104,10 @@ router.post('/register', async (req, res) => {
     return res.status(201).json({ user: userPayload, token: rawToken });
   } catch (err) {
     console.error('Registration error:', err);
-    return res.status(500).json({ error: 'Internal server error during registration' });
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'An account with this username or email already exists' });
+    }
+    return res.status(500).json({ error: err.message || 'Internal server error during registration' });
   }
 });
 

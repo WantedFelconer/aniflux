@@ -33,7 +33,10 @@ if (dbHost) {
       ssl: sslConfig,
       waitForConnections: true,
       connectionLimit: 10,
-      queueLimit: 0,
+      maxIdle: 10,
+      idleTimeout: 60000,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000,
       connectTimeout: 10000
     });
   } catch (e) {
@@ -555,7 +558,22 @@ const db = {
       try {
         return await pool.query(sql, params);
       } catch (err) {
-        return executeMemoryQuery(sql, params);
+        // Automatic retry on transient cloud connection drops
+        if (
+          err.code === 'PROTOCOL_CONNECTION_LOST' ||
+          err.code === 'ECONNRESET' ||
+          err.code === 'ETIMEDOUT'
+        ) {
+          console.warn('[MySQL Reconnecting after transient drop...]:', err.code);
+          try {
+            return await pool.query(sql, params);
+          } catch (retryErr) {
+            console.error('[MySQL Retry Error]:', retryErr.message);
+            throw retryErr;
+          }
+        }
+        console.error('[MySQL Error in db.query]:', err.message, '| SQL:', sql.slice(0, 120));
+        throw err;
       }
     }
     return executeMemoryQuery(sql, params);

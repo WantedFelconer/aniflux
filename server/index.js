@@ -59,19 +59,19 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/forgot-password', authLimiter);
+app.use(['/api/auth/login', '/auth/login'], authLimiter);
+app.use(['/api/auth/forgot-password', '/auth/forgot-password'], authLimiter);
 
 // API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/anime', animeRoutes);
-app.use('/api/me', meRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/anime/:id/episodes/:epNumber/comments', commentsRoutes);
-app.use('/api', commentsRoutes);
+app.use(['/api/auth', '/auth'], authRoutes);
+app.use(['/api/anime', '/anime'], animeRoutes);
+app.use(['/api/me', '/me'], meRoutes);
+app.use(['/api/admin', '/admin'], adminRoutes);
+app.use(['/api/anime/:id/episodes/:epNumber/comments', '/anime/:id/episodes/:epNumber/comments'], commentsRoutes);
+app.use(['/api', '/'], commentsRoutes);
 
 // Health check endpoint with live database verification
-app.get('/api/health', async (req, res) => {
+app.get(['/api/health', '/health'], async (req, res) => {
   const isEnvConfigured = Boolean(process.env.DB_HOST);
   let dbStatus = 'In-Memory Fallback';
   let dbError = null;
