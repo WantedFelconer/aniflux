@@ -78,20 +78,6 @@ export default function Navbar({ onSearchOpen, onHome, currentView, onNavigate }
                 {label}
               </button>
             ))}
-
-            {/* Admin Panel Button (Desktop) */}
-            <button
-              onClick={() => onNavigate('admin')}
-              className="ml-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md hover:scale-105"
-              style={{
-                background: currentView === 'admin' ? 'linear-gradient(135deg, #6d3bff, #ff4db8)' : 'rgba(109,59,255,0.18)',
-                color: currentView === 'admin' ? '#fff' : '#c084fc',
-                border: '1px solid rgba(192,132,252,0.4)',
-              }}
-            >
-              <span>🛡️</span>
-              <span>Admin Panel</span>
-            </button>
           </div>
 
           {/* Right */}
@@ -207,14 +193,6 @@ export default function Navbar({ onSearchOpen, onHome, currentView, onNavigate }
                 {label}
               </button>
             ))}
-
-            <button
-              onClick={() => { onNavigate('admin'); setMobileMenuOpen(false) }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-left transition-all text-purple-300 mt-1"
-              style={{ background: currentView === 'admin' ? 'linear-gradient(135deg, #6d3bff, #ff4db8)' : 'rgba(109,59,255,0.15)', color: currentView === 'admin' ? '#fff' : '#c084fc' }}
-            >
-              <span>🛡️</span> Admin Panel
-            </button>
           </div>
         )}
       </nav>
@@ -290,7 +268,7 @@ function ProfileDropdownMenu({ user, onNavigate, onLogout, onClose }: { user: an
             <div className="flex items-center gap-1.5">
               <p className="text-sm font-bold text-white truncate">{user.username}</p>
               {isAdmin && (
-                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-400 border border-purple-500/40">
+                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-red-500/20 text-red-400 border border-red-500/40">
                   Admin
                 </span>
               )}
@@ -300,33 +278,44 @@ function ProfileDropdownMenu({ user, onNavigate, onLogout, onClose }: { user: an
         </div>
 
         {/* Links */}
-        <div className="space-y-0.5">
-          {isAdmin && (
-            <button
-              onClick={() => onNavigate('admin')}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-left transition-all mb-1"
-              style={{ background: 'linear-gradient(135deg, rgba(109,59,255,0.2), rgba(255,77,184,0.2))', color: '#ff4db8', border: '1px solid rgba(255,77,184,0.3)' }}
-            >
-              <span>🛡️</span> Admin Dashboard
-            </button>
-          )}
-
+        <div className="space-y-1">
+          {/* 1. Profile & Settings */}
           <button
             onClick={() => onNavigate('profile')}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-left transition-colors hover:bg-white/5 text-zinc-300"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-left transition-colors hover:bg-white/5 text-zinc-300 cursor-pointer"
           >
             <UserIcon /> Profile & Settings
           </button>
+
+          {/* 2. Red Tile: Admin Panel */}
+          <button
+            onClick={() => onNavigate('admin')}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-left transition-all hover:scale-[1.02] cursor-pointer shadow-md"
+            style={{
+              background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(185, 28, 28, 0.35))',
+              color: '#f87171',
+              border: '1px solid rgba(239, 68, 68, 0.45)',
+              boxShadow: '0 2px 10px rgba(239, 68, 68, 0.15)'
+            }}
+          >
+            <span className="text-sm">🛡️</span>
+            <span>Admin Panel</span>
+          </button>
+
+          {/* 3. My Watchlist */}
           <button
             onClick={() => onNavigate('my-list')}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-left transition-colors hover:bg-white/5 text-zinc-300"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-left transition-colors hover:bg-white/5 text-zinc-300 cursor-pointer"
           >
             <BookmarkIcon size={14} /> My Watchlist
           </button>
+
           <div className="my-1 border-t" style={{ borderColor: '#23252b' }} />
+
+          {/* 4. Sign Out */}
           <button
             onClick={onLogout}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-left transition-colors hover:bg-red-500/10 text-red-400"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-left transition-colors hover:bg-red-500/10 text-red-400 cursor-pointer"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 14H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h3M11 12l4-4-4-4M15 8H6"/></svg>
             Sign Out

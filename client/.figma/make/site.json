@@ -1,5 +1,6 @@
 {
-  "description": "This web application streamlines the UI design process, enabling designers to create, collaborate, and share interactive mockups efficiently.",
+  "title": "Aniflux",
+  "description": "Aniflux - Stream Your Favorite Anime in Ultra HD with Zero Ads and Real-Time Episode Discussions",
   "robots": {
     "index": false
   },

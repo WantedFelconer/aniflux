@@ -504,17 +504,21 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
     setFormGenres(prev => (prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]))
   }
 
-  const [adminPass, setAdminPass] = useState('admin123')
+  const [adminPass, setAdminPass] = useState('')
   const [isLoggingIn, setIsLoggingIn] = useState(false)
 
   const handleQuickAdminLogin = async () => {
+    if (!adminPass) {
+      showToast('Please enter the administrator password.')
+      return
+    }
     setIsLoggingIn(true)
     try {
       const success = await login('admin', adminPass, true)
       if (success) {
         showToast('Authenticated as Administrator! 🛡️')
       } else {
-        showToast('Login failed. Please check password.')
+        showToast('Login failed. Invalid administrator password.')
       }
     } catch (err: any) {
       showToast(`Error: ${err.message}`)
@@ -534,29 +538,35 @@ export default function AdminPanel({ onAnimeClick, onWatch, onNavigateHome }: Ad
             You need to be authenticated as the system administrator (<code className="text-purple-400 font-mono">admin</code>) to manage anime catalogs and Gumlet video streaming links.
           </p>
 
-          <div className="p-4 rounded-2xl bg-black/40 border border-gray-800 mb-6 text-left">
+          <form
+            onSubmit={e => {
+              e.preventDefault()
+              handleQuickAdminLogin()
+            }}
+            className="p-4 rounded-2xl bg-black/40 border border-gray-800 mb-6 text-left"
+          >
             <label className="text-[11px] text-gray-400 font-semibold block mb-1.5">Admin Password:</label>
             <input
               type="password"
               value={adminPass}
               onChange={e => setAdminPass(e.target.value)}
-              placeholder="Enter admin password (default: admin123)"
+              placeholder="Enter admin password"
               className="w-full px-3.5 py-2 rounded-xl text-xs bg-black/60 border border-gray-700 text-white outline-none focus:border-purple-500 mb-3"
             />
             <button
-              onClick={handleQuickAdminLogin}
-              disabled={isLoggingIn}
-              className="w-full py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2"
-              style={{ background: 'linear-gradient(135deg, #6d3bff, #ff4db8)' }}
+              type="submit"
+              disabled={isLoggingIn || !adminPass}
+              className="w-full py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:hover:scale-100 cursor-pointer"
+              style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)' }}
             >
-              <span>⚡</span>
-              <span>{isLoggingIn ? 'Authenticating...' : 'Sign In as Admin (admin123)'}</span>
+              <span>🛡️</span>
+              <span>{isLoggingIn ? 'Authenticating...' : 'Sign In as Admin'}</span>
             </button>
-          </div>
+          </form>
 
           <button
             onClick={onNavigateHome}
-            className="px-5 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white transition-colors"
+            className="px-5 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white transition-colors cursor-pointer"
           >
             ← Return to Home Catalog
           </button>
