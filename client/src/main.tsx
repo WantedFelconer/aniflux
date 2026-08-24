@@ -1,8 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
-import { AppProvider } from './context/AppContext'
-import { AuthProvider } from './context/AuthContext'
+import { AppProvider } from './shared/context/AppContext'
+import { AuthProvider } from './shared/context/AuthContext'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -14,4 +14,3 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </AuthProvider>
   </React.StrictMode>,
 )
-

@@ -1,29 +1,45 @@
 import { useState, useEffect, useCallback } from 'react'
-import Navbar from './components/Navbar'
-import Hero from './components/Hero'
-import ContinueWatching from './components/ContinueWatching'
-import TrendingSection from './components/TrendingSection'
-import RecentlyUpdated from './components/RecentlyUpdated'
-import GenresSection from './components/GenresSection'
-import TopRated from './components/TopRated'
-import ScheduleWidget from './components/ScheduleWidget'
-import Footer from './components/Footer'
-import SearchModal from './components/SearchModal'
-import WatchPage from './components/WatchPage'
-import AnimeProfilePage from './components/AnimeProfilePage'
-import AnimeListPage from './components/AnimeListPage'
-import ChatPage from './components/ChatPage'
-import MyListPage from './components/MyListPage'
-import UserProfilePage from './components/UserProfilePage'
-import TrendingPage from './components/TrendingPage'
-import SchedulePage from './components/SchedulePage'
-import LoginPage from './components/LoginPage'
-import RegisterPage from './components/RegisterPage'
-import ForgotPasswordPage from './components/ForgotPasswordPage'
-import AuthModal from './components/AuthModal'
-import AdminPanel from './components/AdminPanel'
-import { animeData, type Anime } from './data/animeData'
-import { useApp } from './context/AppContext'
+
+// Shared UI & Layout
+import Navbar from './shared/components/Navbar'
+import Footer from './shared/components/Footer'
+
+// Feature: Anime
+import Hero from './features/anime/Hero'
+import TrendingSection from './features/anime/TrendingSection'
+import RecentlyUpdated from './features/anime/RecentlyUpdated'
+import GenresSection from './features/anime/GenresSection'
+import TopRated from './features/anime/TopRated'
+import SearchModal from './features/anime/SearchModal'
+import AnimeProfilePage from './features/anime/AnimeProfilePage'
+import AnimeListPage from './features/anime/AnimeListPage'
+import TrendingPage from './features/anime/TrendingPage'
+
+// Feature: Player & Streaming
+import WatchPage from './features/player/WatchPage'
+import ContinueWatching from './features/player/ContinueWatching'
+
+// Feature: Schedule & Community
+import ScheduleWidget from './features/schedule/ScheduleWidget'
+import SchedulePage from './features/schedule/SchedulePage'
+import ChatPage from './features/chat/ChatPage'
+
+// Feature: User & Library
+import MyListPage from './features/user/MyListPage'
+import UserProfilePage from './features/user/UserProfilePage'
+
+// Feature: Auth
+import LoginPage from './features/auth/LoginPage'
+import RegisterPage from './features/auth/RegisterPage'
+import ForgotPasswordPage from './features/auth/ForgotPasswordPage'
+import AuthModal from './features/auth/AuthModal'
+
+// Feature: Admin
+import AdminPanel from './features/admin/AdminPanel'
+
+// Shared Data & State
+import { animeData, type Anime } from './shared/data/animeData'
+import { useApp } from './shared/context/AppContext'
 
 export type View = 'home' | 'watch' | 'anime-profile' | 'browse' | 'chat' | 'my-list' | 'profile' | 'trending' | 'schedule' | 'login' | 'register' | 'forgot-password' | 'admin'
 

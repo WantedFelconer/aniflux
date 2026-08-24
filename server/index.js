@@ -1,17 +1,18 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
-import authRoutes from './routes/auth.js';
-import animeRoutes from './routes/anime.js';
-import meRoutes from './routes/me.js';
-import adminRoutes from './routes/admin.js';
-import commentsRoutes from './routes/comments.js';
-import streamRoutes from './routes/stream.js';
+import authRoutes from './modules/auth/auth.routes.js';
+import animeRoutes from './modules/anime/anime.routes.js';
+import streamRoutes from './modules/stream/stream.routes.js';
+import commentsRoutes from './modules/comments/comments.routes.js';
+import userRoutes from './modules/user/user.routes.js';
+import adminRoutes from './modules/admin/admin.routes.js';
+
 import streamSupervisor from './services/supervisor.js';
-import db from './db.js';
+import { errorHandler } from './middleware/errorHandler.js';
+import db from './config/db.js';
 
 dotenv.config();
 
@@ -19,9 +20,9 @@ dotenv.config();
 streamSupervisor.start();
 
 const app = express();
-const PORT = process.env.BACKEND_PORT || process.env.PORT_API || 5000;
+const PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT_API || '5000', 10);
 
-// CORS setup supporting local development and Vercel deployments
+// CORS configuration supporting local development and cloud deployments
 const allowedOrigins = [
   'http://localhost:8443',
   'http://localhost:5173',
@@ -30,7 +31,7 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: function (origin, callback) {
+  origin: (origin, callback) => {
     if (
       !origin ||
       allowedOrigins.includes(origin) ||
@@ -51,28 +52,16 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Rate limiter for auth endpoints
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Generous limit to prevent false positives during active browsing
-  message: { error: 'Too many authentication attempts, please try again after 15 minutes' },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-app.use(['/api/auth/login', '/auth/login'], authLimiter);
-app.use(['/api/auth/forgot-password', '/auth/forgot-password'], authLimiter);
-
-// API Routes
+// Domain API Modules
 app.use(['/api/auth', '/auth'], authRoutes);
-app.use(['/api/anime', '/anime'], animeRoutes);
+app.use(['/api/anime', '/anime', '/api/admin/anime', '/admin/anime'], animeRoutes);
 app.use(['/api/stream', '/stream'], streamRoutes);
-app.use(['/api/me', '/me'], meRoutes);
+app.use(['/api/me', '/me'], userRoutes);
 app.use(['/api/admin', '/admin'], adminRoutes);
 app.use(['/api/anime/:id/episodes/:epNumber/comments', '/anime/:id/episodes/:epNumber/comments'], commentsRoutes);
-app.use(['/api', '/'], commentsRoutes);
+app.use(['/api/comments', '/comments'], commentsRoutes);
 
-// Health check endpoint with live database verification
+// Health check endpoint
 app.get(['/api/health', '/health'], async (req, res) => {
   const isEnvConfigured = Boolean(process.env.DB_HOST);
   let dbStatus = 'In-Memory Fallback';
@@ -114,12 +103,7 @@ app.get(['/api/health', '/health'], async (req, res) => {
 });
 
 // Centralized Error Handler
-app.use((err, req, res, next) => {
-  console.error('Unhandled server error:', err);
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal Server Error'
-  });
-});
+app.use(errorHandler);
 
 export default app;
 

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import db from '../db.js';
+import db from '../config/db.js';
 
 export function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -80,5 +80,3 @@ export async function requireAdmin(req, res, next) {
     return res.status(500).json({ error: 'Internal server error in authorization' });
   }
 }
-
-
