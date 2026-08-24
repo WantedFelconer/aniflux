@@ -293,7 +293,10 @@ async function executeMemoryQuery(sql, params = []) {
     return [user ? [user] : []];
   }
 
-  if (cleanSql.includes('FROM users WHERE email = ? OR username = ?')) {
+  if (
+    cleanSql.includes('FROM users WHERE email = ? OR username = ?') ||
+    cleanSql.includes('FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)')
+  ) {
     const input = (params[0] || '').toLowerCase();
     const user = memoryDb.users.find(u => u.email.toLowerCase() === input || u.username.toLowerCase() === input);
     return [user ? [user] : []];

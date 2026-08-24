@@ -10,6 +10,7 @@ import meRoutes from './routes/me.js';
 import adminRoutes from './routes/admin.js';
 import commentsRoutes from './routes/comments.js';
 import streamSupervisor from './services/supervisor.js';
+import db from './db.js';
 
 dotenv.config();
 
@@ -69,12 +70,43 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/anime/:id/episodes/:epNumber/comments', commentsRoutes);
 app.use('/api', commentsRoutes);
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
+// Health check endpoint with live database verification
+app.get('/api/health', async (req, res) => {
+  const isEnvConfigured = Boolean(process.env.DB_HOST);
+  let dbStatus = 'In-Memory Fallback';
+  let dbError = null;
+  let latencyMs = null;
+  let userCount = 0;
+  let animeCount = 0;
+
+  if (isEnvConfigured) {
+    const start = Date.now();
+    try {
+      const [uRows] = await db.query('SELECT COUNT(*) as count FROM users');
+      const [aRows] = await db.query('SELECT COUNT(*) as count FROM anime');
+      latencyMs = Date.now() - start;
+      dbStatus = 'MySQL Connected';
+      userCount = uRows[0]?.count || 0;
+      animeCount = aRows[0]?.count || 0;
+    } catch (err) {
+      dbStatus = 'MySQL Error';
+      dbError = err.message;
+    }
+  }
+
   res.json({
     status: 'ok',
-    service: 'Aniflux API MVP',
-    mode: process.env.DB_HOST ? 'MySQL Connected' : 'In-Memory Fallback',
+    service: 'Aniflux API',
+    mode: dbStatus,
+    database: {
+      status: dbStatus,
+      host: process.env.DB_HOST ? `${process.env.DB_HOST.slice(0, 10)}...` : 'none',
+      database: process.env.DB_NAME || 'aniflux',
+      latencyMs,
+      totalUsers: userCount,
+      totalAnime: animeCount,
+      error: dbError
+    },
     timestamp: new Date().toISOString()
   });
 });

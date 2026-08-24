@@ -114,8 +114,8 @@ router.post('/login', async (req, res) => {
 
     const [users] = await db.query(
       `SELECT user_id, username, email, password_hash, is_active, avatar_url, bio, level, role, created_at
-       FROM users WHERE email = ? OR username = ?`,
-      [inputClean.toLowerCase(), inputClean]
+       FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)`,
+      [inputClean, inputClean]
     );
 
     if (users.length === 0 || !users[0].password_hash) {

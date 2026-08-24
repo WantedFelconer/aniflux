@@ -10,6 +10,7 @@
     "dev": "npm run dev --prefix client",
     "build": "npm run build --prefix client",
     "server": "node server/index.js",
+    "db:test": "node server/test_db.js",
     "db:init": "node server/init_db.js && node server/seed.js"
   },
   "dependencies": {
